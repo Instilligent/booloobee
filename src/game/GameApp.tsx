@@ -56,7 +56,8 @@ export function GameApp() {
   const [ready, setReady] = useState(false);
   const [muted, setMuted] = useState(false);
   const [character, setCharacter] = useState<CharacterId>("rancher");
-  const [landscapeOk, setLandscapeOk] = useState(true);
+  const [landscapeHint, setLandscapeHint] = useState(false);
+  const [hintDismissed, setHintDismissed] = useState(false);
   const lastTap = useRef(0);
   const stickId = useRef<number | null>(null);
 
@@ -74,10 +75,12 @@ export function GameApp() {
 
   useEffect(() => {
     const check = () => {
-      const portrait = window.innerHeight > window.innerWidth * 1.15;
+      // Soft tip only — never block the game
+      const portrait = window.innerHeight > window.innerWidth * 1.05;
       const coarse =
-        window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
-      setLandscapeOk(!portrait || !coarse);
+        typeof window !== "undefined" &&
+        (window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window);
+      setLandscapeHint(portrait && coarse && !hintDismissed);
     };
     check();
     window.addEventListener("resize", check);
@@ -86,7 +89,7 @@ export function GameApp() {
       window.removeEventListener("resize", check);
       window.removeEventListener("orientationchange", check);
     };
-  }, []);
+  }, [hintDismissed]);
 
   useEffect(() => {
     const el = mountRef.current;
@@ -262,12 +265,20 @@ export function GameApp() {
       {/* 3D canvas */}
       <div ref={mountRef} className="absolute inset-0" />
 
-      {/* Landscape nudge for phones */}
-      {!landscapeOk && (
-        <div className="absolute inset-0 z-[80] flex flex-col items-center justify-center bg-[#1a1028]/95 px-6 text-center pointer-events-auto">
-          <div className="text-4xl mb-3">📱↻</div>
-          <p className="text-fg font-bold text-lg">Turn sideways</p>
-          <p className="text-subtle text-sm mt-1">Landscape is easier to play</p>
+      {/* Soft landscape tip — does NOT block Play */}
+      {landscapeHint && hud.screen === "title" && (
+        <div className="absolute top-2 inset-x-2 z-[70] flex justify-center pointer-events-auto">
+          <div className="flex items-center gap-2 rounded-full bg-bg/90 border border-border px-3 py-2 shadow-lg max-w-md">
+            <span className="text-sm">↻ Landscape is easier</span>
+            <button
+              type="button"
+              className="rounded-full bg-accent text-accent-fg text-xs font-bold px-3 py-1.5 min-h-9"
+              style={{ touchAction: "manipulation" }}
+              onClick={() => setHintDismissed(true)}
+            >
+              OK
+            </button>
+          </div>
         </div>
       )}
 
@@ -491,24 +502,35 @@ export function GameApp() {
                 type="button"
                 data-action="start"
                 disabled={!ready}
-                className="w-full rounded-xl bg-accent text-accent-fg px-4 py-3.5 text-sm font-bold min-h-12"
-                style={{ touchAction: "manipulation" }}
+                className="w-full rounded-xl bg-accent text-accent-fg px-4 py-3.5 text-sm font-bold min-h-12 disabled:opacity-50"
+                style={{ touchAction: "manipulation", pointerEvents: "auto" }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!ready) return;
+                  gameAudio.unlock();
+                  runAction("start");
+                }}
               >
-                Play
+                {ready ? "Play" : "Loading…"}
               </button>
-              {(hud.level > 1 || hud.coins > 40) && (
-                <button
-                  type="button"
-                  data-action="continue"
-                  className="w-full rounded-xl border border-border bg-surface-2 text-fg px-4 py-3 text-sm font-semibold min-h-12"
-                  style={{ touchAction: "manipulation" }}
-                >
-                  Continue
-                </button>
-              )}
+              <button
+                type="button"
+                data-action="continue"
+                className="w-full rounded-xl border border-border bg-surface-2 text-fg px-4 py-3 text-sm font-semibold min-h-12"
+                style={{ touchAction: "manipulation", pointerEvents: "auto" }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  gameAudio.unlock();
+                  runAction("continue");
+                }}
+              >
+                Continue
+              </button>
             </div>
             <p className="text-center text-[11px] text-muted mt-3">
-              Turn phone sideways · walk to pink piles · green button does the work
+              Walk to pink piles · green button works the chain
             </p>
           </div>
         </div>
