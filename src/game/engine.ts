@@ -132,6 +132,20 @@ interface Customer {
   bob: number;
 }
 
+interface StarPickup {
+  mesh: THREE.Mesh;
+  pos: THREE.Vector3;
+  taken: boolean;
+  spin: number;
+}
+
+interface DecorInteract {
+  kind: "fountain" | "compost" | "jukebox";
+  pos: THREE.Vector3;
+  mesh: THREE.Group;
+  cd: number;
+}
+
 export type TouchAxes = { x: number; y: number };
 export type EngineCallbacks = { onHud: (hud: HudSnapshot) => void };
 
@@ -220,6 +234,11 @@ export class GameEngine {
   private particles: Particle[] = [];
   private workers: Worker[] = [];
   private customers: Customer[] = [];
+  private stars: StarPickup[] = [];
+  private decorInteract: DecorInteract[] = [];
+  private trees: THREE.Group[] = [];
+  private flowers: THREE.Mesh[] = [];
+  private fairyLights: THREE.PointLight[] = [];
   private floats: FloatWorld[] = [];
   private nextFloatId = 1;
   private decorRings: THREE.Mesh[] = [];
@@ -242,7 +261,7 @@ export class GameEngine {
   };
 
   private mats = {
-    ground: new THREE.MeshStandardMaterial({ color: 0x5a9a62, roughness: 0.92 }),
+    ground: new THREE.MeshStandardMaterial({ color: 0x4f9a5c, roughness: 0.88 }),
     dirt: new THREE.MeshStandardMaterial({ color: 0x8b6a4a, roughness: 0.95 }),
     path: new THREE.MeshStandardMaterial({ color: 0xd4c4a0, roughness: 0.9 }),
     platform: new THREE.MeshStandardMaterial({ color: 0xe8d4a8, roughness: 0.75 }),
@@ -585,6 +604,11 @@ export class GameEngine {
     this.particles = [];
     this.workers = [];
     this.customers = [];
+    this.stars = [];
+    this.decorInteract = [];
+    this.trees = [];
+    this.flowers = [];
+    this.fairyLights = [];
     this.floats = [];
     this.decorRings = [];
     this.clouds = [];
@@ -595,21 +619,24 @@ export class GameEngine {
   }
 
   private buildLights() {
-    this.scene.add(new THREE.HemisphereLight(0xfff6e8, 0x4a7a52, 0.95));
-    const sun = new THREE.DirectionalLight(0xfff5e0, 1.35);
-    sun.position.set(16, 30, 12);
+    this.scene.add(new THREE.HemisphereLight(0xfff0f8, 0x3d7a48, 1.05));
+    const sun = new THREE.DirectionalLight(0xfff2dc, 1.5);
+    sun.position.set(18, 32, 14);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.near = 2;
-    sun.shadow.camera.far = 90;
-    sun.shadow.camera.left = -45;
-    sun.shadow.camera.right = 45;
-    sun.shadow.camera.top = 45;
-    sun.shadow.camera.bottom = -45;
+    sun.shadow.camera.far = 100;
+    sun.shadow.camera.left = -50;
+    sun.shadow.camera.right = 50;
+    sun.shadow.camera.top = 50;
+    sun.shadow.camera.bottom = -50;
     this.scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xa8d4ff, 0.4);
-    fill.position.set(-14, 12, -10);
+    const fill = new THREE.DirectionalLight(0xb8d8ff, 0.5);
+    fill.position.set(-16, 14, -12);
     this.scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xff9acc, 0.25);
+    rim.position.set(0, 8, 20);
+    this.scene.add(rim);
   }
 
   private addClouds(rng: () => number, spread = 40) {
@@ -815,6 +842,9 @@ export class GameEngine {
     this.spawnCrops(rng);
     this.placeBuildings();
     this.initPileGroups();
+    this.decorateRanch(rng);
+    this.spawnStars(rng);
+    this.spawnExtraStations();
 
     this.playerMesh = this.makePlayerMesh();
     this.playerPos.set(this.level.spawn.x, 0, this.level.spawn.z);
@@ -1551,6 +1581,7 @@ export class GameEngine {
     this.updateChain(dt);
     this.updateWorkers(dt);
     this.updateCustomers(dt);
+    this.updatePickups(dt);
     this.syncStagePiles();
     this.syncCarryVisual();
     this.updateParticles(dt);
@@ -2099,6 +2130,12 @@ export class GameEngine {
     }
 
     const step = this.nextStep();
+    // Fountain / compost / jukebox
+    if (this.tryDecorInteract()) {
+      if (want) this.doDecorInteract();
+      return;
+    }
+
     this.interactHint = null;
     this.spaInteract = 0;
     this.processInteract = 0;
@@ -2580,6 +2617,12 @@ export class GameEngine {
       ring.scale.set(pulse, pulse, pulse);
     }
     for (const part of this.spinParts) part.rotation.y += delta * 2.5;
+    for (const fl of this.fairyLights) {
+      fl.intensity = 0.4 + Math.sin(t * 3 + fl.position.x) * 0.25;
+    }
+    for (const flower of this.flowers) {
+      flower.position.y = 0.12 + Math.sin(t * 2 + flower.position.x) * 0.03;
+    }
     for (const c of this.crops) {
       if (c.harvested) continue;
       c.mesh.rotation.y = Math.sin(t * 1.5 + c.id) * 0.15;
@@ -2610,6 +2653,305 @@ export class GameEngine {
     const lerp = 1 - Math.exp(-8 * delta);
     this.camera.position.lerp(this.camPos, lerp);
     this.camera.lookAt(this.camTarget);
+  }
+
+
+  private decorateRanch(rng: () => number) {
+    const w = this.level.width;
+    const d = this.level.depth;
+    // Flower clusters
+    for (let i = 0; i < 40; i++) {
+      const x = (rng() - 0.5) * w * 0.85;
+      const z = (rng() - 0.5) * d * 0.85;
+      if (Math.hypot(x, z - this.level.spawn.z) < 2) continue;
+      const colors = [0xff6bb5, 0xffe14a, 0xb06bff, 0x4ab8ff, 0xff8a40, 0xffffff];
+      const petal = new THREE.Mesh(
+        this.geo.sphere,
+        new THREE.MeshStandardMaterial({
+          color: colors[i % colors.length],
+          emissive: colors[i % colors.length],
+          emissiveIntensity: 0.25,
+          roughness: 0.5,
+        }),
+      );
+      petal.scale.setScalar(0.12 + rng() * 0.08);
+      petal.position.set(x, 0.12, z);
+      this.scene.add(petal);
+      this.flowers.push(petal);
+    }
+    // Candy trees
+    for (let i = 0; i < 12; i++) {
+      const g = new THREE.Group();
+      const trunk = new THREE.Mesh(
+        this.geo.cyl,
+        new THREE.MeshStandardMaterial({ color: 0x8b5a3c, roughness: 0.9 }),
+      );
+      trunk.scale.set(0.25, 1.4, 0.25);
+      trunk.position.y = 0.7;
+      trunk.castShadow = true;
+      g.add(trunk);
+      const canopyMat = new THREE.MeshStandardMaterial({
+        color: i % 2 ? 0xff8ec8 : 0x7ad46a,
+        roughness: 0.65,
+        emissive: i % 2 ? 0xff5aa8 : 0x3a8a40,
+        emissiveIntensity: 0.12,
+      });
+      for (let j = 0; j < 3; j++) {
+        const canopy = new THREE.Mesh(this.geo.sphere, canopyMat);
+        canopy.scale.set(0.7 + j * 0.15, 0.55, 0.7 + j * 0.1);
+        canopy.position.set((j - 1) * 0.25, 1.6 + j * 0.25, (j % 2) * 0.15);
+        canopy.castShadow = true;
+        g.add(canopy);
+      }
+      // edge placement
+      const edge = i % 4;
+      let x = 0;
+      let z = 0;
+      if (edge === 0) {
+        x = -w / 2 + 2 + rng() * 3;
+        z = (rng() - 0.5) * d * 0.8;
+      } else if (edge === 1) {
+        x = w / 2 - 2 - rng() * 3;
+        z = (rng() - 0.5) * d * 0.8;
+      } else if (edge === 2) {
+        x = (rng() - 0.5) * w * 0.8;
+        z = -d / 2 + 2 + rng() * 3;
+      } else {
+        x = (rng() - 0.5) * w * 0.8;
+        z = d / 2 - 2 - rng() * 3;
+      }
+      g.position.set(x, 0, z);
+      this.scene.add(g);
+      this.trees.push(g);
+    }
+    // Fairy lights along path
+    const pathPts = [this.spa.pos, this.processor.pos, this.packer.pos, this.market.pos];
+    for (let i = 0; i < pathPts.length - 1; i++) {
+      const a = pathPts[i];
+      const b = pathPts[i + 1];
+      for (let s = 0; s < 3; s++) {
+        const t = (s + 1) / 4;
+        const light = new THREE.PointLight(RAINBOW[(i + s) % RAINBOW.length], 0.55, 8);
+        light.position.set(a.x + (b.x - a.x) * t, 2.2, a.z + (b.z - a.z) * t);
+        this.scene.add(light);
+        this.fairyLights.push(light);
+        const bulb = new THREE.Mesh(
+          this.geo.sphere,
+          new THREE.MeshStandardMaterial({
+            color: RAINBOW[(i + s) % RAINBOW.length],
+            emissive: RAINBOW[(i + s) % RAINBOW.length],
+            emissiveIntensity: 0.9,
+          }),
+        );
+        bulb.scale.setScalar(0.12);
+        bulb.position.copy(light.position);
+        this.scene.add(bulb);
+      }
+    }
+    // Checkered picnic rugs
+    for (let i = 0; i < 3; i++) {
+      const rug = new THREE.Mesh(
+        this.geo.box,
+        new THREE.MeshStandardMaterial({ color: i % 2 ? 0xffc0e0 : 0xfff0a0, roughness: 0.95 }),
+      );
+      rug.scale.set(2.5, 0.04, 2.5);
+      rug.position.set((rng() - 0.5) * w * 0.5, 0.02, (rng() - 0.5) * d * 0.4);
+      this.scene.add(rug);
+    }
+  }
+
+  private spawnStars(rng: () => number) {
+    const n = 8 + Math.floor(this.level.id * 1.5);
+    for (let i = 0; i < n; i++) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xffe14a,
+        emissive: 0xffaa00,
+        emissiveIntensity: 0.75,
+        metalness: 0.4,
+        roughness: 0.3,
+      });
+      const mesh = new THREE.Mesh(this.geo.cone, mat);
+      mesh.scale.set(0.25, 0.35, 0.25);
+      const x = (rng() - 0.5) * this.level.width * 0.7;
+      const z = (rng() - 0.5) * this.level.depth * 0.7;
+      mesh.position.set(x, 0.7, z);
+      this.scene.add(mesh);
+      this.stars.push({
+        mesh,
+        pos: new THREE.Vector3(x, 0.7, z),
+        taken: false,
+        spin: rng() * Math.PI,
+      });
+    }
+  }
+
+  private spawnExtraStations() {
+    // Healing fountain near spawn
+    const f = new THREE.Group();
+    const base = new THREE.Mesh(
+      this.geo.cyl,
+      new THREE.MeshStandardMaterial({ color: 0xb0d4ff, metalness: 0.3, roughness: 0.4 }),
+    );
+    base.scale.set(1.2, 0.4, 1.2);
+    base.position.y = 0.2;
+    f.add(base);
+    const water = new THREE.Mesh(
+      this.geo.cyl,
+      new THREE.MeshStandardMaterial({
+        color: 0x6ed4ff,
+        transparent: true,
+        opacity: 0.7,
+        emissive: 0x4ab8ff,
+        emissiveIntensity: 0.35,
+      }),
+    );
+    water.scale.set(0.9, 0.5, 0.9);
+    water.position.y = 0.6;
+    water.name = "spin";
+    f.add(water);
+    this.spinParts.push(water);
+    const spout = new THREE.Mesh(this.geo.sphere, this.mats.leaf);
+    spout.scale.setScalar(0.2);
+    spout.position.y = 1.1;
+    f.add(spout);
+    const fpos = new THREE.Vector3(this.level.spawn.x - 4, 0, this.level.spawn.z - 1);
+    f.position.copy(fpos);
+    this.scene.add(f);
+    this.decorInteract.push({ kind: "fountain", pos: fpos, mesh: f, cd: 0 });
+    this.addRingMarker(fpos, 0x6ed4ff);
+
+    // Compost for bonus coins from raw overflow
+    const c = new THREE.Group();
+    const bin = new THREE.Mesh(
+      this.geo.box,
+      new THREE.MeshStandardMaterial({ color: 0x6b8f4a, roughness: 0.8 }),
+    );
+    bin.scale.set(1.4, 1.1, 1.2);
+    bin.position.y = 0.55;
+    bin.castShadow = true;
+    c.add(bin);
+    const lid = new THREE.Mesh(
+      this.geo.box,
+      new THREE.MeshStandardMaterial({ color: 0x4a6a30, roughness: 0.7 }),
+    );
+    lid.scale.set(1.5, 0.12, 1.3);
+    lid.position.y = 1.15;
+    c.add(lid);
+    const cpos = new THREE.Vector3(this.spa.pos.x - 3.5, 0, this.spa.pos.z + 2.5);
+    c.position.copy(cpos);
+    this.scene.add(c);
+    this.decorInteract.push({ kind: "compost", pos: cpos, mesh: c, cd: 0 });
+    this.addRingMarker(cpos, 0x7ad46a);
+
+    // Jukebox near market — coin for music dance + tip
+    const j = new THREE.Group();
+    const box = new THREE.Mesh(
+      this.geo.box,
+      new THREE.MeshStandardMaterial({ color: 0xff4d94, metalness: 0.35, roughness: 0.4 }),
+    );
+    box.scale.set(0.9, 1.4, 0.6);
+    box.position.y = 0.7;
+    box.castShadow = true;
+    j.add(box);
+    const neon = new THREE.Mesh(
+      this.geo.box,
+      new THREE.MeshStandardMaterial({
+        color: 0x4ab8ff,
+        emissive: 0x4ab8ff,
+        emissiveIntensity: 0.8,
+      }),
+    );
+    neon.scale.set(0.6, 0.35, 0.08);
+    neon.position.set(0, 1.0, 0.32);
+    neon.name = "spin";
+    j.add(neon);
+    this.spinParts.push(neon);
+    const jpos = new THREE.Vector3(this.market.pos.x + 3.2, 0, this.market.pos.z + 1.5);
+    j.position.copy(jpos);
+    this.scene.add(j);
+    this.decorInteract.push({ kind: "jukebox", pos: jpos, mesh: j, cd: 0 });
+    this.addRingMarker(jpos, 0xff4d94);
+  }
+
+  private updatePickups(dt: number) {
+    const t = this.clock.elapsedTime;
+    for (const s of this.stars) {
+      if (s.taken) continue;
+      s.spin += dt * 3;
+      s.mesh.rotation.y = s.spin;
+      s.mesh.position.y = 0.7 + Math.sin(t * 3 + s.spin) * 0.15;
+      if (Math.hypot(s.pos.x - this.playerPos.x, s.pos.z - this.playerPos.z) < 1.2) {
+        s.taken = true;
+        s.mesh.visible = false;
+        this.save.coins += 3;
+        this.spawnFloat(s.pos.clone().setY(1.2), "+3c", "#ffe14a");
+        gameAudio.play("coin");
+        writeSave(this.save);
+      }
+    }
+    for (const d of this.decorInteract) {
+      if (d.cd > 0) d.cd -= dt;
+    }
+  }
+
+  private tryDecorInteract(): boolean {
+    for (const d of this.decorInteract) {
+      if (Math.hypot(d.pos.x - this.playerPos.x, d.pos.z - this.playerPos.z) > 2.4) continue;
+      if (d.kind === "fountain") {
+        this.interactHint = "Heal";
+        return true;
+      }
+      if (d.kind === "compost") {
+        this.interactHint = this.raw > 0 ? "Compost" : "Compost";
+        return true;
+      }
+      if (d.kind === "jukebox") {
+        this.interactHint = "Dance";
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private doDecorInteract() {
+    for (const d of this.decorInteract) {
+      if (Math.hypot(d.pos.x - this.playerPos.x, d.pos.z - this.playerPos.z) > 2.4) continue;
+      if (d.cd > 0) continue;
+      if (d.kind === "fountain") {
+        d.cd = 4;
+        const before = this.health;
+        this.health = Math.min(this.maxHealth, this.health + 25);
+        const gained = Math.floor(this.health - before);
+        this.spawnHitParticles(d.pos.clone().setY(1), 0x6ed4ff, 10);
+        this.spawnFloat(d.pos.clone().setY(1.8), gained > 0 ? `+${gained} HP` : "Full!", "#6ed4ff");
+        gameAudio.play("spa");
+        return;
+      }
+      if (d.kind === "compost" && this.raw > 0) {
+        d.cd = 0.8;
+        const n = Math.min(2, this.raw);
+        this.raw -= n;
+        const pay = n * 2;
+        this.save.coins += pay;
+        this.spawnFloat(d.pos.clone().setY(1.5), `Compost +${pay}c`, "#7ad46a");
+        gameAudio.play("pop");
+        writeSave(this.save);
+        return;
+      }
+      if (d.kind === "jukebox") {
+        d.cd = 5;
+        this.save.coins += 5;
+        // Happy customers tip
+        for (const c of this.customers.slice(0, 2)) {
+          if (c.state === "queue") this.spawnFloat(c.pos.clone().setY(1.5), "♪", "#ff9acc");
+        }
+        this.spawnHitParticles(d.pos.clone().setY(1.2), 0xff4d94, 12);
+        this.spawnFloat(d.pos.clone().setY(2), "+5c tips", "#ff9acc");
+        gameAudio.play("thanks");
+        writeSave(this.save);
+        return;
+      }
+    }
   }
 
   private flashMessage(msg: string) {
@@ -2643,46 +2985,110 @@ export class GameEngine {
     if (h === "Grind") return "GRIND";
     if (h === "Box") return "BOX";
     if (h === "Sell") return "SELL";
+    if (h === "Heal") return "HEAL";
+    if (h === "Compost") return "DUMP";
+    if (h === "Dance") return "DANCE";
     if (h.startsWith("→")) return "GO";
     return "USE";
+  }
+
+  private anchorWorldPos(anchor: string): THREE.Vector3 {
+    switch (anchor) {
+      case "field":
+        return new THREE.Vector3(0, 2.4, this.level.spawn.z * 0.55);
+      case "spa":
+        return this.spa.pos.clone().setY(2.8);
+      case "grind":
+        return this.processor.pos.clone().setY(2.8);
+      case "pack":
+        return this.packer.pos.clone().setY(2.8);
+      case "market":
+        return this.market.pos.clone().setY(2.8);
+      case "player":
+      default:
+        return this.playerPos.clone().setY(2.6);
+    }
   }
 
   private projectWorldOffers(): WorldOffer[] {
     if (this.screen !== "playing" || !this.market) return [];
     const offers: WorldOffer[] = [];
     const worldItems = UPGRADES.filter((u) => u.worldShop);
-    // Fan above market stall
-    const base = this.market.pos.clone();
-    base.y = 2.8;
     const v = this.tmpV;
-    let i = 0;
-    for (const def of worldItems) {
-      const level = this.save.upgrades[def.id] ?? 0;
-      if (level >= def.maxLevel) continue;
-      const cost = upgradeCost(def, level);
-      // Arrange in arc above shop
-      const ang = (i - 3.5) * 0.35;
-      const wx = base.x + Math.sin(ang) * 2.4;
-      const wy = base.y + 0.4 + Math.floor(i / 4) * 0.9;
-      const wz = base.z + Math.cos(ang) * 0.8 + 1.2;
-      v.set(wx, wy, wz).project(this.camera);
-      const visible = v.z < 1 && Math.abs(v.x) < 1.2 && Math.abs(v.y) < 1.2;
-      // Also require player near market to reduce clutter
-      const nearShop =
-        Math.hypot(this.playerPos.x - this.market.pos.x, this.playerPos.z - this.market.pos.z) < 10;
-      offers.push({
-        id: def.id,
-        label: def.shortName || def.name,
-        cost,
-        level,
-        maxLevel: def.maxLevel,
-        canAfford: this.save.coins >= cost,
-        x: (v.x * 0.5 + 0.5) * 100,
-        y: (-v.y * 0.5 + 0.5) * 100,
-        visible: visible && nearShop,
-      });
-      i++;
+
+    // Find nearest station anchor (not player) so only that area's buttons show
+    const stations: { id: string; pos: THREE.Vector3; dist: number }[] = [
+      { id: "field", pos: new THREE.Vector3(0, 0, this.level.spawn.z * 0.55), dist: 0 },
+      { id: "spa", pos: this.spa.pos.clone(), dist: 0 },
+      { id: "grind", pos: this.processor.pos.clone(), dist: 0 },
+      { id: "pack", pos: this.packer.pos.clone(), dist: 0 },
+      { id: "market", pos: this.market.pos.clone(), dist: 0 },
+    ];
+    for (const s of stations) {
+      s.dist = Math.hypot(this.playerPos.x - s.pos.x, this.playerPos.z - s.pos.z);
     }
+    stations.sort((a, b) => a.dist - b.dist);
+    const nearest = stations[0];
+    const atStation = nearest.dist < 5.5;
+    const activeAnchor = atStation ? nearest.id : null;
+
+    // Group defs
+    const byAnchor = new Map<string, typeof worldItems>();
+    for (const def of worldItems) {
+      const a = def.worldAnchor || "market";
+      if (!byAnchor.has(a)) byAnchor.set(a, []);
+      byAnchor.get(a)!.push(def);
+    }
+
+    const place = (anchor: string, defs: typeof worldItems, maxShow = 6) => {
+      const base = this.anchorWorldPos(anchor);
+      let slot = 0;
+      for (const def of defs) {
+        if (slot >= maxShow) break;
+        const level = this.save.upgrades[def.id] ?? 0;
+        if (level >= def.maxLevel) continue;
+        const cost = upgradeCost(def, level);
+        const col = slot % 2;
+        const row = Math.floor(slot / 2);
+        let px: number, py: number, pz: number;
+        if (anchor === "player") {
+          px = this.playerPos.x + (col === 0 ? -0.95 : 0.95);
+          py = this.playerPos.y + 2.35 + row * 0.55;
+          pz = this.playerPos.z;
+        } else {
+          px = base.x + (col === 0 ? -0.9 : 0.9);
+          py = base.y + row * 0.7;
+          pz = base.z + 0.5;
+        }
+        v.set(px, py, pz).project(this.camera);
+        const onScreen = v.z < 1 && Math.abs(v.x) < 1.15 && Math.abs(v.y) < 1.15;
+        if (!onScreen) {
+          slot++;
+          continue;
+        }
+        offers.push({
+          id: def.id,
+          label: def.shortName || def.name,
+          cost,
+          level,
+          maxLevel: def.maxLevel,
+          canAfford: this.save.coins >= cost,
+          x: (v.x * 0.5 + 0.5) * 100,
+          y: (-v.y * 0.5 + 0.5) * 100,
+          visible: true,
+        });
+        slot++;
+      }
+    };
+
+    if (activeAnchor && byAnchor.has(activeAnchor)) {
+      place(activeAnchor, byAnchor.get(activeAnchor)!, 6);
+    } else {
+      // Open field: show player combat/mobility upgrades only (max 4)
+      const playerDefs = byAnchor.get("player") || [];
+      place("player", playerDefs, 4);
+    }
+
     return offers;
   }
 

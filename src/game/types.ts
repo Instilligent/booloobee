@@ -15,6 +15,9 @@ export type GunTier = 0 | 1 | 2 | 3 | 4;
 
 export type UpgradeCategory = "gun" | "chain" | "crew" | "player";
 
+/** Where floating upgrade buttons appear in the world */
+export type WorldAnchor = "field" | "spa" | "grind" | "pack" | "market" | "player";
+
 export interface GunStats {
   name: string;
   damage: number;
@@ -33,10 +36,9 @@ export interface UpgradeDef {
   baseCost: number;
   costScale: number;
   maxLevel: number;
-  /** Short label for floating world button */
   shortName?: string;
-  /** Show as floating buy button near market */
   worldShop?: boolean;
+  worldAnchor?: WorldAnchor;
 }
 
 export interface CharacterDef {
@@ -87,7 +89,6 @@ export interface FloatText {
   life: number;
 }
 
-/** Floating in-world hire/buy button (screen %) */
 export interface WorldOffer {
   id: string;
   label: string;
