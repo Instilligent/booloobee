@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build / deploy output
+dist/
+.vercel/
+.output/
+.nitro/
+.tanstack/
+.vinxi/
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+
+# Logs & OS
+*.log
+/tmp/
+.DS_Store
+
+# Agent / sandbox-only (not part of the game)
+.grok/
+screenshots/
+artifacts/
+vendor/
+
+# Editor
+.idea/
+.vscode/
+*.swp
