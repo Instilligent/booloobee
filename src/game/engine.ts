@@ -1,14 +1,18 @@
 import * as THREE from "three";
 import {
+  CHARACTERS,
   GUN_TIERS,
   LEVELS,
   RAINBOW,
   UPGRADES,
+  characterDef,
   enemyStats,
   upgradeCost,
 } from "./data";
+import { gameAudio } from "./audio";
 import { defaultSave, loadSave, writeSave } from "./save";
 import type {
+  CharacterId,
   EnemyKind,
   FloatText,
   GunTier,
@@ -16,6 +20,7 @@ import type {
   LevelDef,
   SaveData,
   Screen,
+  WorldOffer,
 } from "./types";
 
 const FIXED = 1 / 60;
@@ -241,7 +246,7 @@ export class GameEngine {
     dirt: new THREE.MeshStandardMaterial({ color: 0x8b6a4a, roughness: 0.95 }),
     path: new THREE.MeshStandardMaterial({ color: 0xd4c4a0, roughness: 0.9 }),
     platform: new THREE.MeshStandardMaterial({ color: 0xe8d4a8, roughness: 0.75 }),
-    crop: new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.85 }),
+    crop: new THREE.MeshStandardMaterial({ color: 0xff8ec8, roughness: 0.75, emissive: 0xff5aa8, emissiveIntensity: 0.15 }),
     leaf: new THREE.MeshStandardMaterial({
       color: 0xffe14a,
       emissive: 0xffaa22,
@@ -367,12 +372,32 @@ export class GameEngine {
   setMouseDown(v: boolean) {
     this.mouseDown = v;
   }
+  setCharacter(id: CharacterId) {
+    this.save.character = id;
+    writeSave(this.save);
+    // rebuild player if in play
+    if (this.screen === "playing" && this.playerMesh) {
+      const pos = this.playerPos.clone();
+      this.scene.remove(this.playerMesh);
+      this.playerMesh = this.makePlayerMesh();
+      this.playerMesh.position.copy(pos);
+      this.playerMesh.rotation.y = this.faceYaw;
+      this.scene.add(this.playerMesh);
+      this.paintGun();
+    }
+    this.hudDirty = true;
+    this.emitHud(true);
+  }
+  getCharacter() {
+    return this.save.character;
+  }
   nudgeLook(dxPx: number, dyPx: number) {
     this.yaw -= dxPx * 0.0045;
     this.pitch = clamp(this.pitch + dyPx * 0.0032, 0.35, 1.15);
   }
 
   startGame(levelIndex = 0) {
+    gameAudio.unlock();
     const idx = Math.max(0, Math.min(LEVELS.length - 1, levelIndex));
     this.levelIndex = idx;
     this.screen = "playing";
@@ -414,6 +439,7 @@ export class GameEngine {
     if (level >= def.maxLevel) return;
     const cost = upgradeCost(def, level);
     if (this.save.coins < cost) {
+      gameAudio.play("fail");
       this.flashMessage("Not enough coins");
       this.emitHud(true);
       return;
@@ -426,6 +452,7 @@ export class GameEngine {
     writeSave(this.save);
     if (id.startsWith("hire_")) {
       this.syncWorkers();
+      gameAudio.play("hire");
       this.flashMessage(
         id === "hire_farmer"
           ? "Farmer hired — they scoop for you!"
@@ -437,6 +464,7 @@ export class GameEngine {
       );
       this.spawnHitParticles(this.playerPos.clone().setY(1.2), 0xffe14a, 14);
     } else {
+      gameAudio.play("upgrade");
       this.flashMessage(`${def.name} upgraded`);
     }
     this.emitHud(true);
@@ -796,7 +824,7 @@ export class GameEngine {
     this.scene.add(this.playerMesh);
     this.paintGun();
     this.syncWorkers();
-    this.flashMessage(this.level.goalHint);
+    this.message = null;
     this.hudDirty = true;
   }
 
@@ -817,16 +845,18 @@ export class GameEngine {
     this.addChainPath(this.processor.pos, this.packer.pos);
     this.addChainPath(this.packer.pos, this.market.pos);
 
-    const labels: [string, string, string, THREE.Vector3][] = [
-      ["① SCOOP", "brown piles", "#5a3a1a", field.clone()],
-      ["② SPA", "bubble wash", "#0a5a8a", this.spa.pos],
-      ["③ GRIND", "make glitter", "#4a2a9a", this.processor.pos],
-      ["④ BOX", "fancy bows", "#8a6010", this.packer.pos],
-      ["⑤ SELL", "customer queue", "#9a2060", this.market.pos],
+    // Minimal markers only — colored rings + single step number (no paragraphs)
+    const marks: [string, string, THREE.Vector3][] = [
+      ["①", "#5a3a1a", field.clone()],
+      ["②", "#0a5a8a", this.spa.pos.clone()],
+      ["③", "#4a2a9a", this.processor.pos.clone()],
+      ["④", "#8a6010", this.packer.pos.clone()],
+      ["⑤", "#9a2060", this.market.pos.clone()],
     ];
-    for (const [a, b, color, pos] of labels) {
-      const s = this.makeTextSprite([a, b], color);
-      s.position.set(pos.x, 3.6, pos.z);
+    for (const [num, color, pos] of marks) {
+      const s = this.makeTextSprite([num, ""], color);
+      s.scale.set(1.6, 0.9, 1);
+      s.position.set(pos.x, 2.6, pos.z);
       this.scene.add(s);
     }
   }
@@ -942,51 +972,121 @@ export class GameEngine {
   // --- meshes ---
   private makePlayerMesh() {
     const g = new THREE.Group();
-    const legs = new THREE.Mesh(this.geo.box, this.mats.pants);
-    legs.scale.set(0.5, 0.55, 0.35);
-    legs.position.y = 0.4;
-    legs.castShadow = true;
-    g.add(legs);
-    const body = new THREE.Mesh(this.geo.cyl, this.mats.player);
-    body.scale.set(0.55, 0.7, 0.4);
-    body.position.y = 1.0;
-    body.castShadow = true;
-    g.add(body);
-    const cape = new THREE.Mesh(
-      this.geo.box,
-      new THREE.MeshStandardMaterial({ color: 0xff6bb5, emissive: 0xff3a8a, emissiveIntensity: 0.25 }),
-    );
-    cape.scale.set(0.45, 0.55, 0.08);
-    cape.position.set(0, 1.05, -0.28);
-    g.add(cape);
-    const head = new THREE.Mesh(this.geo.sphere, this.mats.player);
-    head.scale.set(0.4, 0.4, 0.4);
-    head.position.y = 1.6;
-    head.castShadow = true;
-    g.add(head);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x2a1038 });
-    const eyeL = new THREE.Mesh(this.geo.sphere, eyeMat);
-    eyeL.scale.setScalar(0.06);
-    eyeL.position.set(-0.12, 1.65, 0.32);
-    g.add(eyeL);
-    const eyeR = eyeL.clone();
-    eyeR.position.x = 0.12;
-    g.add(eyeR);
-    const hat = new THREE.Mesh(this.geo.cyl, this.mats.hat);
-    hat.scale.set(0.55, 0.18, 0.55);
-    hat.position.y = 1.85;
-    g.add(hat);
-    const brim = new THREE.Mesh(this.geo.cyl, this.mats.hat);
-    brim.scale.set(0.78, 0.06, 0.78);
-    brim.position.y = 1.76;
-    g.add(brim);
-    const tip = new THREE.Mesh(this.geo.cone, this.mats.horn);
-    tip.scale.set(0.1, 0.28, 0.1);
-    tip.position.y = 2.1;
-    g.add(tip);
+    const ch = characterDef(this.save.character ?? "rancher");
+    const bodyMat = new THREE.MeshStandardMaterial({ color: ch.body, roughness: 0.6 });
+    const pantsMat = new THREE.MeshStandardMaterial({ color: ch.pants, roughness: 0.8 });
+    const hatMat = new THREE.MeshStandardMaterial({ color: ch.hat, roughness: 0.65 });
+
+    if (this.save.character === "robot") {
+      const legs = new THREE.Mesh(this.geo.box, pantsMat);
+      legs.scale.set(0.5, 0.45, 0.35);
+      legs.position.y = 0.35;
+      g.add(legs);
+      const body = new THREE.Mesh(this.geo.box, bodyMat);
+      body.scale.set(0.65, 0.7, 0.45);
+      body.position.y = 0.95;
+      body.castShadow = true;
+      g.add(body);
+      const head = new THREE.Mesh(this.geo.box, bodyMat);
+      head.scale.set(0.45, 0.4, 0.4);
+      head.position.y = 1.55;
+      g.add(head);
+      const visor = new THREE.Mesh(
+        this.geo.box,
+        new THREE.MeshStandardMaterial({ color: 0xffe14a, emissive: 0xffaa00, emissiveIntensity: 0.6 }),
+      );
+      visor.scale.set(0.4, 0.12, 0.1);
+      visor.position.set(0, 1.58, 0.22);
+      g.add(visor);
+      const ant = new THREE.Mesh(this.geo.cyl, hatMat);
+      ant.scale.set(0.06, 0.25, 0.06);
+      ant.position.y = 1.9;
+      g.add(ant);
+    } else if (this.save.character === "dino_rider") {
+      const body = new THREE.Mesh(this.geo.sphere, bodyMat);
+      body.scale.set(0.55, 0.4, 0.75);
+      body.position.y = 0.55;
+      body.castShadow = true;
+      g.add(body);
+      const head = new THREE.Mesh(this.geo.sphere, bodyMat);
+      head.scale.set(0.32, 0.28, 0.38);
+      head.position.set(0, 0.85, 0.45);
+      g.add(head);
+      const rider = new THREE.Mesh(this.geo.cyl, pantsMat);
+      rider.scale.set(0.28, 0.35, 0.22);
+      rider.position.set(0, 1.05, -0.05);
+      g.add(rider);
+      const rhead = new THREE.Mesh(this.geo.sphere, new THREE.MeshStandardMaterial({ color: 0xffe8f4 }));
+      rhead.scale.setScalar(0.2);
+      rhead.position.set(0, 1.4, -0.05);
+      g.add(rhead);
+      const crest = new THREE.Mesh(this.geo.cone, hatMat);
+      crest.scale.set(0.12, 0.3, 0.12);
+      crest.position.set(0, 1.05, 0.55);
+      crest.rotation.x = 0.5;
+      g.add(crest);
+    } else {
+      const legs = new THREE.Mesh(this.geo.box, pantsMat);
+      legs.scale.set(0.5, 0.55, 0.35);
+      legs.position.y = 0.4;
+      legs.castShadow = true;
+      g.add(legs);
+      const body = new THREE.Mesh(this.geo.cyl, bodyMat);
+      body.scale.set(0.55, 0.7, 0.4);
+      body.position.y = 1.0;
+      body.castShadow = true;
+      g.add(body);
+      if (this.save.character === "wizard") {
+        const robe = new THREE.Mesh(this.geo.cone, bodyMat);
+        robe.scale.set(0.7, 0.9, 0.55);
+        robe.position.y = 0.7;
+        robe.rotation.x = Math.PI;
+        g.add(robe);
+      } else {
+        const cape = new THREE.Mesh(
+          this.geo.box,
+          new THREE.MeshStandardMaterial({ color: ch.hat, emissive: ch.hat, emissiveIntensity: 0.2 }),
+        );
+        cape.scale.set(0.45, 0.55, 0.08);
+        cape.position.set(0, 1.05, -0.28);
+        g.add(cape);
+      }
+      const head = new THREE.Mesh(this.geo.sphere, bodyMat);
+      head.scale.set(0.4, 0.4, 0.4);
+      head.position.y = 1.6;
+      head.castShadow = true;
+      g.add(head);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x2a1038 });
+      const eyeL = new THREE.Mesh(this.geo.sphere, eyeMat);
+      eyeL.scale.setScalar(0.06);
+      eyeL.position.set(-0.12, 1.65, 0.32);
+      g.add(eyeL);
+      const eyeR = eyeL.clone();
+      eyeR.position.x = 0.12;
+      g.add(eyeR);
+      if (this.save.character === "wizard") {
+        const hat = new THREE.Mesh(this.geo.cone, hatMat);
+        hat.scale.set(0.35, 0.7, 0.35);
+        hat.position.y = 2.15;
+        g.add(hat);
+      } else {
+        const hat = new THREE.Mesh(this.geo.cyl, hatMat);
+        hat.scale.set(0.55, 0.18, 0.55);
+        hat.position.y = 1.85;
+        g.add(hat);
+        const brim = new THREE.Mesh(this.geo.cyl, hatMat);
+        brim.scale.set(0.78, 0.06, 0.78);
+        brim.position.y = 1.76;
+        g.add(brim);
+      }
+      const tip = new THREE.Mesh(this.geo.cone, this.mats.horn);
+      tip.scale.set(0.1, 0.28, 0.1);
+      tip.position.y = this.save.character === "wizard" ? 2.55 : 2.1;
+      g.add(tip);
+    }
+
     this.gunMesh = new THREE.Group();
     g.add(this.gunMesh);
-    // carry attachment
     this.carryMesh = new THREE.Group();
     this.carryMesh.position.set(-0.45, 1.0, 0.15);
     g.add(this.carryMesh);
@@ -1018,22 +1118,58 @@ export class GameEngine {
 
   private makeCropMesh() {
     const g = new THREE.Group();
-    const base = new THREE.Mesh(this.geo.sphere, this.mats.crop);
-    base.scale.set(0.55, 0.35, 0.5);
+    // Pink unicorn poop
+    const pink = new THREE.MeshStandardMaterial({
+      color: 0xff8ec8,
+      roughness: 0.75,
+      emissive: 0xff5aa8,
+      emissiveIntensity: 0.12,
+    });
+    const pink2 = new THREE.MeshStandardMaterial({
+      color: 0xffb0dc,
+      roughness: 0.7,
+      emissive: 0xff6bb5,
+      emissiveIntensity: 0.18,
+    });
+    const base = new THREE.Mesh(this.geo.sphere, pink);
+    base.scale.set(0.58, 0.36, 0.52);
     base.position.y = 0.2;
     base.castShadow = true;
     g.add(base);
-    const top = new THREE.Mesh(this.geo.sphere, this.mats.crop);
-    top.scale.set(0.35, 0.28, 0.32);
-    top.position.set(0.08, 0.42, 0.05);
+    const top = new THREE.Mesh(this.geo.sphere, pink2);
+    top.scale.set(0.38, 0.3, 0.34);
+    top.position.set(0.08, 0.44, 0.05);
     g.add(top);
-    const sparkle = new THREE.Mesh(this.geo.sphere, this.mats.leaf);
-    sparkle.scale.setScalar(0.14);
-    sparkle.position.set(-0.05, 0.58, 0.1);
-    g.add(sparkle);
-    const orb = new THREE.Mesh(this.geo.sphere, new THREE.MeshBasicMaterial({ color: 0xffffff }));
-    orb.scale.setScalar(0.05);
-    orb.position.set(0.3, 0.7, 0);
+    const peak = new THREE.Mesh(this.geo.sphere, pink);
+    peak.scale.set(0.22, 0.2, 0.2);
+    peak.position.set(-0.06, 0.58, -0.04);
+    g.add(peak);
+    // Glitter flecks in the poop
+    const fleckColors = [0xffe14a, 0x4ab8ff, 0xb06bff, 0xffffff, 0x5ee07a];
+    for (let i = 0; i < 7; i++) {
+      const fleck = new THREE.Mesh(
+        this.geo.box,
+        new THREE.MeshStandardMaterial({
+          color: fleckColors[i % fleckColors.length],
+          emissive: fleckColors[i % fleckColors.length],
+          emissiveIntensity: 0.7,
+          roughness: 0.3,
+        }),
+      );
+      fleck.scale.setScalar(0.06 + (i % 3) * 0.02);
+      const a = (i / 7) * Math.PI * 2;
+      fleck.position.set(Math.cos(a) * 0.28, 0.28 + (i % 3) * 0.12, Math.sin(a) * 0.22);
+      fleck.rotation.set(a, a * 0.5, 0);
+      fleck.name = i === 0 ? "orb" : "glitter";
+      g.add(fleck);
+    }
+    // Sparkle orb that orbits
+    const orb = new THREE.Mesh(
+      this.geo.sphere,
+      new THREE.MeshBasicMaterial({ color: 0xffffff }),
+    );
+    orb.scale.setScalar(0.06);
+    orb.position.set(0.3, 0.75, 0);
     orb.name = "orb";
     g.add(orb);
     return g;
@@ -1165,7 +1301,48 @@ export class GameEngine {
 
   private makeEnemyMesh(kind: EnemyKind, color: number, height: number) {
     const g = new THREE.Group();
+    const statsForm = kind === "dino" || kind === "raptor" ? "dino" : "unicorn";
     const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
+    if (statsForm === "dino") {
+      const body = new THREE.Mesh(this.geo.sphere, bodyMat);
+      const s = height * 0.5;
+      body.scale.set(s * 0.85, s * 0.65, s * 1.25);
+      body.position.y = height * 0.38;
+      body.castShadow = true;
+      g.add(body);
+      const head = new THREE.Mesh(this.geo.sphere, bodyMat);
+      head.scale.set(s * 0.4, s * 0.35, s * 0.5);
+      head.position.set(0, height * 0.7, s * 0.7);
+      g.add(head);
+      // snout
+      const snout = new THREE.Mesh(this.geo.box, bodyMat);
+      snout.scale.set(s * 0.28, s * 0.2, s * 0.35);
+      snout.position.set(0, height * 0.65, s * 1.05);
+      g.add(snout);
+      // tail
+      const tail = new THREE.Mesh(this.geo.cone, bodyMat);
+      tail.scale.set(s * 0.25, s * 0.7, s * 0.25);
+      tail.position.set(0, height * 0.4, -s * 0.85);
+      tail.rotation.x = Math.PI / 2;
+      g.add(tail);
+      // plates
+      for (let i = 0; i < 3; i++) {
+        const plate = new THREE.Mesh(this.geo.cone, this.mats.horn);
+        plate.scale.set(0.1, 0.22, 0.08);
+        plate.position.set(0, height * 0.7 + i * 0.05, -0.1 + i * 0.15);
+        g.add(plate);
+      }
+      // legs
+      for (const sx of [-0.2, 0.2]) {
+        const leg = new THREE.Mesh(this.geo.cyl, bodyMat);
+        leg.scale.set(0.12, height * 0.35, 0.12);
+        leg.position.set(sx, height * 0.15, 0.1);
+        g.add(leg);
+      }
+      if (kind === "raptor") g.scale.setScalar(0.85);
+      return g;
+    }
+    // Unicorn form
     const body = new THREE.Mesh(this.geo.sphere, bodyMat);
     const s = height * 0.55;
     body.scale.set(s * 0.9, s * 0.75, s * 1.1);
@@ -1265,7 +1442,13 @@ export class GameEngine {
   private productMesh(kind: "raw" | "washed" | "glitter" | "boxed") {
     const g = new THREE.Group();
     if (kind === "raw") {
-      const m = new THREE.Mesh(this.geo.sphere, this.mats.crop);
+      const pink = new THREE.MeshStandardMaterial({
+        color: 0xff8ec8,
+        emissive: 0xff5aa8,
+        emissiveIntensity: 0.2,
+        roughness: 0.7,
+      });
+      const m = new THREE.Mesh(this.geo.sphere, pink);
       m.scale.set(0.35, 0.22, 0.32);
       m.position.y = 0.12;
       g.add(m);
@@ -1550,6 +1733,7 @@ export class GameEngine {
 
     // Muzzle flash
     this.spawnHitParticles(origin, RAINBOW[this.rainbowIdx % RAINBOW.length], 4);
+    gameAudio.play("shoot");
 
     for (let i = 0; i < gun.projectiles; i++) {
       const dir = aim.clone();
@@ -1612,8 +1796,10 @@ export class GameEngine {
             this.killCount++;
             this.save.coins += e.coin;
             this.spawnFloat(e.pos.clone().setY(1.5), `+${e.coin}c`, "#ffe08a");
-            this.flashMessage("Rainbowed!");
+            gameAudio.play("kill");
+            /* quiet */
           } else {
+            gameAudio.play("hit");
             this.spawnFloat(e.pos.clone().setY(1.2), "Hit!", "#fff");
           }
           break;
@@ -1692,7 +1878,7 @@ export class GameEngine {
         tx = this.market.pos.x;
         tz = this.market.pos.z;
         standoff = false;
-      } else if (e.kind === "pest" || e.kind === "beetle") {
+      } else if (e.kind === "pest" || e.kind === "beetle" || e.kind === "dino" || e.kind === "raptor") {
         let best: Crop | null = null;
         let bestD = 12;
         for (const c of this.crops) {
@@ -1729,7 +1915,7 @@ export class GameEngine {
         this.hurtPlayer(e.damage);
         e.attackCd = 1.0;
       }
-      if ((e.kind === "pest" || e.kind === "beetle") && e.attackCd <= 0) {
+      if ((e.kind === "pest" || e.kind === "beetle" || e.kind === "dino" || e.kind === "raptor") && e.attackCd <= 0) {
         for (const c of this.crops) {
           if (c.harvested || c.ready < 1) continue;
           if (Math.hypot(c.pos.x - e.pos.x, c.pos.z - e.pos.z) < 1.1) {
@@ -1738,7 +1924,7 @@ export class GameEngine {
             c.growTimer = 7;
             c.mesh.scale.setScalar(0.2);
             e.attackCd = 1.2;
-            this.flashMessage("A unicorn sat on the sparkle-poop!");
+            /* quiet pest */
             break;
           }
         }
@@ -1747,7 +1933,7 @@ export class GameEngine {
         if (Math.hypot(this.market.pos.x - e.pos.x, this.market.pos.z - e.pos.z) < 2.2) {
           this.boxed = Math.max(0, this.boxed - 1);
           e.stealCd = 2.5;
-          this.flashMessage("Bandit stole a fancy crate!");
+          this.flashMessage("Stolen!");
         }
       }
     }
@@ -1755,8 +1941,9 @@ export class GameEngine {
 
   private hurtPlayer(dmg: number) {
     if (this.hurtCd > 0) return;
+    gameAudio.play("hurt");
     this.health -= dmg;
-    this.hurtCd = 0.65;
+    this.hurtCd = 0.9;
     this.spawnHitParticles(this.playerPos.clone().setY(1.2), 0xd46a5c, 6);
     if (this.health <= 0) {
       this.health = 0;
@@ -1787,7 +1974,7 @@ export class GameEngine {
       }
     }
     if (nearest) {
-      this.interactHint = "① Hold green — Scoop sparkle-poop";
+      this.interactHint = "Scoop";
       if (want) {
         this.harvestProgress += this.harvestRate() * dt;
         if (this.harvestProgress >= 1) {
@@ -1813,7 +2000,10 @@ export class GameEngine {
             this.spawnHitParticles(crop.pos.clone().setY(0.6), 0xffe14a, 8);
             this.spawnFloat(crop.pos.clone().setY(1), `+${y} stinky`, "#ffe14a");
           }
-          if (total > 0) this.flashMessage(`Carrying ${this.raw} stinky piles → blue Spa`);
+          if (total > 0) {
+            gameAudio.play("scoop");
+            /* quiet */
+          }
         }
       } else this.harvestProgress = Math.max(0, this.harvestProgress - dt * 2);
       return;
@@ -1822,7 +2012,7 @@ export class GameEngine {
 
     if (this.near(this.spa.pos, 0.6)) {
       if (this.raw > 0) {
-        this.interactHint = "② Hold green — Dump into Bubble Spa";
+        this.interactHint = "Wash";
         if (want) {
           this.spaInteract += this.spaRate() * dt;
           if (this.spaInteract >= 1) {
@@ -1831,18 +2021,19 @@ export class GameEngine {
             this.raw -= n;
             this.spa.buffer += n;
             this.spawnFloat(this.spa.pos.clone().setY(1.8), `Wash ×${n}`, "#4ec8ff");
-            this.flashMessage("Bubbling in the spa…");
+            gameAudio.play("spa");
+            /* quiet */
           }
         }
-      } else if (this.spa.buffer > 0) this.interactHint = "② Bubbling… watch clean piles appear";
-      else if (this.washed > 0) this.interactHint = "② Clean piles ready — take to purple Grind";
-      else this.interactHint = "② Scoop piles first";
+      } else if (this.spa.buffer > 0) this.interactHint = "…";
+      else if (this.washed > 0) this.interactHint = "→ Grind";
+      else this.interactHint = null;
       return;
     }
 
     if (this.near(this.processor.pos, 0.6)) {
       if (this.washed > 0) {
-        this.interactHint = "③ Hold green — Feed clean piles";
+        this.interactHint = "Grind";
         if (want) {
           this.processInteract += dt * 4.5;
           if (this.processInteract >= 0.18) {
@@ -1851,18 +2042,19 @@ export class GameEngine {
             this.washed -= n;
             this.processor.buffer += n;
             this.spawnFloat(this.processor.pos.clone().setY(2), `Feed ×${n}`, "#c9a0ff");
-            this.flashMessage("Grinding into glitter powder…");
+            gameAudio.play("grind");
+            /* quiet */
           }
         }
-      } else if (this.processor.buffer > 0) this.interactHint = "③ Grinding… glitter stacking up";
-      else if (this.glitter > 0) this.interactHint = "③ Glitter ready → gold Boxer";
-      else this.interactHint = "③ Wash at the Spa first";
+      } else if (this.processor.buffer > 0) this.interactHint = "…";
+      else if (this.glitter > 0) this.interactHint = "→ Box";
+      else this.interactHint = null;
       return;
     }
 
     if (this.near(this.packer.pos, 0.6)) {
       if (this.glitter > 0) {
-        this.interactHint = "④ Hold green — Box with fancy bows";
+        this.interactHint = "Box";
         if (want) {
           this.packInteract += this.packRate() * dt;
           if (this.packInteract >= 1) {
@@ -1871,18 +2063,19 @@ export class GameEngine {
             this.glitter -= n;
             this.packer.buffer += n;
             this.spawnFloat(this.packer.pos.clone().setY(2), `Box ×${n}`, "#ffc84a");
-            this.flashMessage("Gift crates ready — customers are lining up!");
+            gameAudio.play("box");
+            /* quiet */
           }
         }
-      } else if (this.packer.buffer > 0) this.interactHint = "④ Boxing… bows going on";
-      else if (this.boxed > 0) this.interactHint = "④ Crates ready — sell at pink Market queue";
-      else this.interactHint = "④ Need glitter from the grinder";
+      } else if (this.packer.buffer > 0) this.interactHint = "…";
+      else if (this.boxed > 0) this.interactHint = "→ Sell";
+      else this.interactHint = null;
       return;
     }
 
     if (this.near(this.market.pos, 0.6)) {
       if (this.boxed > 0) {
-        this.interactHint = `⑤ Hold green — Serve ${this.customers.length} customer${this.customers.length === 1 ? "" : "s"}`;
+        this.interactHint = "Sell";
         if (want) {
           this.sellProgress += this.sellRate() * dt;
           if (this.sellProgress >= 1) {
@@ -1896,24 +2089,17 @@ export class GameEngine {
             this.spawnHitParticles(this.market.pos.clone().setY(1.2), 0xff9acc, 12);
             this.spawnFloat(this.market.pos.clone().setY(2), `+${pay}c`, "#ffe08a");
             this.serveCustomers(n);
-            this.flashMessage(`Sold ×${n} · +${pay}c · ${this.sold}/${this.level.quota}`);
+            gameAudio.play("sell");
+            this.flashMessage(`+${pay}c`);
             writeSave(this.save);
           }
         } else this.sellProgress = Math.max(0, this.sellProgress - dt);
-      } else this.interactHint = "⑤ No crates — box glitter first (customers wait for stock)";
+      } else this.interactHint = null;
       return;
     }
 
     const step = this.nextStep();
-    const tips = [
-      "",
-      "→ Scoop brown piles ①",
-      "→ Carry stinky to blue Spa ②",
-      "→ Take clean piles to purple Grind ③",
-      "→ Glitter to gold Boxer ④",
-      "→ Serve the customer queue ⑤",
-    ];
-    this.interactHint = tips[step] || null;
+    this.interactHint = null;
     this.spaInteract = 0;
     this.processInteract = 0;
     this.packInteract = 0;
@@ -1943,6 +2129,7 @@ export class GameEngine {
         this.washed += 1;
         this.spawnHitParticles(this.spa.pos.clone().setY(1.2), 0x4ec8ff, 6);
         this.spawnFloat(this.spa.pos.clone().setY(2), "+1 clean pile", "#a8e8ff");
+        gameAudio.play("pop");
       }
     }
 
@@ -1954,6 +2141,7 @@ export class GameEngine {
         this.glitter += 1;
         this.spawnHitParticles(this.processor.pos.clone().setY(1.5), 0xb06bff, 8);
         this.spawnFloat(this.processor.pos.clone().setY(2.2), "+1 glitter", "#d4a0ff");
+        gameAudio.play("pop");
       }
     }
 
@@ -1965,6 +2153,7 @@ export class GameEngine {
         this.boxed += 1;
         this.spawnHitParticles(this.packer.pos.clone().setY(1.4), 0xffc84a, 8);
         this.spawnFloat(this.packer.pos.clone().setY(2), "+1 gift crate", "#ffe08a");
+        gameAudio.play("box");
         // New stock draws customers
         this.ensureCustomerQueue();
       }
@@ -2098,6 +2287,7 @@ export class GameEngine {
       c.state = "leave";
       c.timer = 0;
       this.spawnFloat(c.pos.clone().setY(1.6), "Thanks!", "#ffe08a");
+      gameAudio.play("thanks");
       left--;
     }
   }
@@ -2309,12 +2499,14 @@ export class GameEngine {
         this.save.highestLevel = Math.min(LEVELS.length, this.level.id + 1);
       }
       writeSave(this.save);
+      gameAudio.play("levelup");
       this.flashMessage(`Quota cleared! Bonus +${bonus}c`);
       this.emitHud(true);
       return;
     }
     if (this.timeLeft <= 0) {
       this.timeLeft = 0;
+      gameAudio.play("fail");
       this.screen = "gameOver";
       document.exitPointerLock?.();
       writeSave(this.save);
@@ -2444,6 +2636,56 @@ export class GameEngine {
     return out;
   }
 
+  private actionLabelFromHint(): string {
+    const h = this.interactHint || "";
+    if (h === "Scoop") return "SCOOP";
+    if (h === "Wash") return "WASH";
+    if (h === "Grind") return "GRIND";
+    if (h === "Box") return "BOX";
+    if (h === "Sell") return "SELL";
+    if (h.startsWith("→")) return "GO";
+    return "USE";
+  }
+
+  private projectWorldOffers(): WorldOffer[] {
+    if (this.screen !== "playing" || !this.market) return [];
+    const offers: WorldOffer[] = [];
+    const worldItems = UPGRADES.filter((u) => u.worldShop);
+    // Fan above market stall
+    const base = this.market.pos.clone();
+    base.y = 2.8;
+    const v = this.tmpV;
+    let i = 0;
+    for (const def of worldItems) {
+      const level = this.save.upgrades[def.id] ?? 0;
+      if (level >= def.maxLevel) continue;
+      const cost = upgradeCost(def, level);
+      // Arrange in arc above shop
+      const ang = (i - 3.5) * 0.35;
+      const wx = base.x + Math.sin(ang) * 2.4;
+      const wy = base.y + 0.4 + Math.floor(i / 4) * 0.9;
+      const wz = base.z + Math.cos(ang) * 0.8 + 1.2;
+      v.set(wx, wy, wz).project(this.camera);
+      const visible = v.z < 1 && Math.abs(v.x) < 1.2 && Math.abs(v.y) < 1.2;
+      // Also require player near market to reduce clutter
+      const nearShop =
+        Math.hypot(this.playerPos.x - this.market.pos.x, this.playerPos.z - this.market.pos.z) < 10;
+      offers.push({
+        id: def.id,
+        label: def.shortName || def.name,
+        cost,
+        level,
+        maxLevel: def.maxLevel,
+        canAfford: this.save.coins >= cost,
+        x: (v.x * 0.5 + 0.5) * 100,
+        y: (-v.y * 0.5 + 0.5) * 100,
+        visible: visible && nearShop,
+      });
+      i++;
+    }
+    return offers;
+  }
+
   private emitHud(force = false) {
     if (force) this.hudDirty = false;
     const gun = this.gunStats();
@@ -2481,6 +2723,9 @@ export class GameEngine {
       },
       floats: this.projectFloats(),
       nextStep: this.screen === "playing" ? this.nextStep() : 1,
+      character: this.save.character ?? "rancher",
+      worldOffers: this.projectWorldOffers(),
+      actionLabel: this.actionLabelFromHint(),
     };
     this.cbs.onHud(snap);
   }

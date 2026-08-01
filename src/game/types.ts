@@ -1,6 +1,15 @@
-export type Screen = "title" | "playing" | "paused" | "upgrade" | "levelComplete" | "gameOver" | "victory";
+export type Screen =
+  | "title"
+  | "playing"
+  | "paused"
+  | "upgrade"
+  | "levelComplete"
+  | "gameOver"
+  | "victory";
 
-export type EnemyKind = "pest" | "beetle" | "thief" | "brute";
+export type EnemyKind = "pest" | "beetle" | "thief" | "brute" | "dino" | "raptor";
+
+export type CharacterId = "rancher" | "cowgirl" | "robot" | "wizard" | "dino_rider";
 
 export type GunTier = 0 | 1 | 2 | 3 | 4;
 
@@ -24,6 +33,19 @@ export interface UpgradeDef {
   baseCost: number;
   costScale: number;
   maxLevel: number;
+  /** Short label for floating world button */
+  shortName?: string;
+  /** Show as floating buy button near market */
+  worldShop?: boolean;
+}
+
+export interface CharacterDef {
+  id: CharacterId;
+  name: string;
+  emoji: string;
+  body: number;
+  pants: number;
+  hat: number;
 }
 
 export interface LevelDef {
@@ -39,24 +61,21 @@ export interface LevelDef {
   timeLimit: number;
   platforms: { x: number; y: number; z: number; w: number; d: number; h?: number }[];
   spawn: { x: number; z: number };
-  /** ② Poop Spa */
   spa: { x: number; z: number };
-  /** ③ Glitter Grinder */
   processor: { x: number; z: number };
-  /** ④ Fancy Boxer */
   packer: { x: number; z: number };
-  /** ⑤ Pink Market */
   market: { x: number; z: number };
   goalHint: string;
 }
 
 export interface SaveData {
-  version: 1;
+  version: 2;
   coins: number;
   gunTier: GunTier;
   upgrades: Record<string, number>;
   highestLevel: number;
   totalSold: number;
+  character: CharacterId;
 }
 
 export interface FloatText {
@@ -68,6 +87,19 @@ export interface FloatText {
   life: number;
 }
 
+/** Floating in-world hire/buy button (screen %) */
+export interface WorldOffer {
+  id: string;
+  label: string;
+  cost: number;
+  level: number;
+  maxLevel: number;
+  canAfford: boolean;
+  x: number;
+  y: number;
+  visible: boolean;
+}
+
 export interface HudSnapshot {
   screen: Screen;
   level: number;
@@ -75,13 +107,9 @@ export interface HudSnapshot {
   health: number;
   maxHealth: number;
   coins: number;
-  /** ① scooped stinky piles */
   raw: number;
-  /** ② washed at spa */
   washed: number;
-  /** ③ glitter powder from grinder */
   glitter: number;
-  /** ④ boxed with bows */
   boxed: number;
   sold: number;
   quota: number;
@@ -105,6 +133,8 @@ export interface HudSnapshot {
     vendors: number;
   };
   floats: FloatText[];
-  /** Next suggested step 1-5 */
   nextStep: number;
+  character: CharacterId;
+  worldOffers: WorldOffer[];
+  actionLabel: string;
 }

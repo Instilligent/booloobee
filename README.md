@@ -1,41 +1,39 @@
 # Booloobee Ranch
 
-A silly **3D ranch supply-chain** game: scoop sparkle-poop, bubble-wash it, grind glitter, box with bows, sell to a customer queue — then hire crew and robots to automate.
+Silly **3D ranch supply-chain** game for pilot testing.
 
-Shoot rainbows at grumpy unicorns when they get in the way.
+Scoop **pink unicorn poop** (with glitter) → bubble spa → grind glitter → box with bows → sell to a customer queue. Hire farmers/robots from floating buttons at the pink shop. Rainbow-blast unicorns **and** dinosaurs.
 
-## Play
+## Play (local)
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the app (dev server binds `0.0.0.0:8080`).
+Best on **landscape** phone or desktop. Sound unlocks on first tap.
 
-| Control | Action |
-|--------|--------|
-| WASD / stick | Move |
-| Drag / look | Turn camera |
-| Green button / E | Scoop · Spa · Grind · Box · Sell |
-| FIRE / click | Rainbow gun |
-| Jump | Jump |
+## Features
+
+- 5 characters (Rancher, Cowgirl, Bot-Bee, Mage, Dino)
+- Pipeline: scoop → wash → grind → box → sell
+- In-world hire/upgrade buttons (no separate shop window)
+- Unicorn + dinosaur pests
+- Procedural SFX + soft music
+- Minimal landscape HUD for pilot feedback
 
 ## Stack
 
-- React 19 + TanStack Start / Router
-- Three.js (3D ranch)
-- Vite + Tailwind v4
-- Local save (localStorage)
+React 19 · TanStack Start · Three.js · Vite · Tailwind v4
 
 ## Scripts
 
 ```bash
-npm run dev        # local play
-npm run build      # production build
-npm run typecheck  # TypeScript
+npm run dev
+npm run build
+npm run typecheck
 ```
 
-## License
+## Org
 
-Personal / prototype project. Built with Grok Build.
+Maintained under [Instilligent](https://github.com/Instilligent).
