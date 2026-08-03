@@ -47,6 +47,7 @@ try {
       health: g.health,
       stars: g.stars?.filter((s) => !s.taken).length ?? 0,
       trees: g.trees?.length ?? 0,
+      fireflies: g.fireflies?.length ?? 0,
     };
   });
   // screen is private — use HUD via internal
@@ -93,6 +94,7 @@ try {
 
   assert(state1.crops >= 8, `crops too few: ${state1.crops}`);
   assert(state1.trees >= 4, `trees missing: ${state1.trees}`);
+  assert(state1.fireflies >= 8, `fireflies missing: ${state1.fireflies}`);
   assert(playing.fieldOffers.some((l) => /Farmer|Scoop|Yield|Robot/i.test(l)), `field offers wrong: ${playing.fieldOffers}`);
   assert(playing.spaOffers.some((l) => /Spa/i.test(l)), `spa offers wrong: ${playing.spaOffers}`);
   assert(playing.marketOffers.some((l) => /Sell|Price|Seller/i.test(l)), `market offers wrong: ${playing.marketOffers}`);

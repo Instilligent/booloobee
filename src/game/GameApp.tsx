@@ -326,8 +326,10 @@ export function GameApp() {
                 touchAction: "manipulation",
               }}
             >
-              {o.label}
-              <span className="ml-1 tabular opacity-90">{o.cost}c</span>
+              <span className="block leading-tight">{o.label}</span>
+              <span className="tabular opacity-90 text-[10px]">
+                {o.cost}c · {o.level}/{o.maxLevel}
+              </span>
             </button>
           ))}
 

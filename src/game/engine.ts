@@ -871,7 +871,7 @@ export class GameEngine {
     this.scene.add(this.playerMesh);
     this.paintGun();
     this.syncWorkers();
-    this.message = null;
+    this.flashMessage(this.level.name);
     this.hudDirty = true;
   }
 
@@ -2434,7 +2434,8 @@ export class GameEngine {
     for (const c of this.customers) {
       c.bob += dt * 3;
       if (c.state === "queue" || c.state === "buy") {
-        c.mesh.position.y = Math.abs(Math.sin(c.bob)) * 0.05;
+        const amp = this.boxed > 0 ? 0.1 : 0.04;
+        c.mesh.position.y = Math.abs(Math.sin(c.bob * (this.boxed > 0 ? 1.4 : 1))) * amp;
         // Impatient hop if waiting long
         c.timer += dt;
         if (c.timer > 12 && this.boxed === 0) {
@@ -2767,6 +2768,15 @@ export class GameEngine {
       if (this.playerMesh) this.playerMesh.rotation.y = t * 0.4;
       return;
     }
+    // Soft sky day-cycle (presentation only)
+    if (this.scene.background && (this.scene.background as THREE.Color).isColor) {
+      const day = 0.5 + 0.5 * Math.sin(t * 0.05);
+      const col = (this.scene.background as THREE.Color);
+      col.setRGB(0.45 + day * 0.15, 0.62 + day * 0.12, 0.82 + day * 0.08);
+      if (this.scene.fog && (this.scene.fog as THREE.Fog).isFog) {
+        (this.scene.fog as THREE.Fog).color.copy(col);
+      }
+    }
 
     this.computeMoveBasis();
     const dist = 14;
@@ -3047,8 +3057,10 @@ export class GameEngine {
       if (sd < 1.35) {
         s.taken = true;
         s.mesh.visible = false;
-        this.save.coins += 3;
-        this.spawnFloat(s.pos.clone().setY(1.2), "+3c", "#ffe14a");
+        const starPay = 3 + Math.floor(this.level.id / 2);
+        this.save.coins += starPay;
+        this.addTrauma(0.05);
+        this.spawnFloat(s.pos.clone().setY(1.2), `+${starPay}c`, "#ffe14a");
         gameAudio.play("coin");
         writeSave(this.save);
       }
