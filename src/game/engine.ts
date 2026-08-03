@@ -239,6 +239,14 @@ export class GameEngine {
   private trees: THREE.Group[] = [];
   private flowers: THREE.Mesh[] = [];
   private fairyLights: THREE.PointLight[] = [];
+  private trauma = 0;
+  private hitstop = 0;
+  private landDustCd = 0;
+  private moveDustCd = 0;
+  private squash = 1;
+  private combo = 0;
+  private comboTimer = 0;
+  private camLookAhead = new THREE.Vector3();
   private floats: FloatWorld[] = [];
   private nextFloatId = 1;
   private decorRings: THREE.Mesh[] = [];
@@ -566,7 +574,7 @@ export class GameEngine {
     };
   }
   private harvestRate() {
-    return 3.8 * (1 + this.up("harvest_speed") * 0.3);
+    return 4.4 * (1 + this.up("harvest_speed") * 0.32);
   }
   private cropYield() {
     return 1 + this.up("crop_yield");
@@ -581,7 +589,7 @@ export class GameEngine {
     return 3.2 * (1 + this.up("pack_speed") * 0.3);
   }
   private sellRate() {
-    return 3.4 * (1 + this.up("sell_speed") * 0.3);
+    return 3.8 * (1 + this.up("sell_speed") * 0.32);
   }
   private sellPrice() {
     return Math.floor(14 * (1 + this.up("sell_price") * 0.28));
@@ -793,6 +801,11 @@ export class GameEngine {
     this.yaw = 0;
     this.faceYaw = Math.PI; // face -Z (camera forward at yaw 0)
     this.pitch = 0.78;
+    this.trauma = 0;
+    this.hitstop = 0;
+    this.squash = 1;
+    this.combo = 0;
+    this.comboTimer = 0;
     this.applyPlayerStatsFromSave();
     this.health = this.maxHealth;
 
@@ -1568,8 +1581,21 @@ export class GameEngine {
   }
 
   private fixedUpdate(dt: number) {
+    // Juice: brief freeze on impact (presentation only)
+    if (this.hitstop > 0) {
+      this.hitstop -= dt;
+      this.trauma = Math.max(0, this.trauma - dt * 1.5);
+      return;
+    }
     this.elapsed += dt;
     this.timeLeft -= dt;
+    if (this.comboTimer > 0) {
+      this.comboTimer -= dt;
+      if (this.comboTimer <= 0) this.combo = 0;
+    }
+    this.trauma = Math.max(0, this.trauma - dt * 1.8);
+    // squash recover
+    this.squash += (1 - this.squash) * Math.min(1, dt * 8);
     if (this.messageT > 0) {
       this.messageT -= dt;
       if (this.messageT <= 0) this.message = null;
@@ -1655,6 +1681,24 @@ export class GameEngine {
     if (this.playerMesh) {
       this.playerMesh.position.copy(this.playerPos);
       this.playerMesh.rotation.y = this.faceYaw;
+      // squash & stretch (volume-ish preserve)
+      const sy = this.squash;
+      const sx = Math.sqrt(1 / Math.max(0.5, sy));
+      this.playerMesh.scale.set(sx, sy, sx);
+    }
+    // landing dust
+    if (this.onGround && this.playerVel.y < -2) {
+      this.spawnHitParticles(this.playerPos.clone().setY(0.1), 0xc4b090, 4);
+      this.pulseSquash(0.75);
+    }
+    // move dust
+    const moving = Math.hypot(this.playerVel.x, this.playerVel.z) > 2 && this.onGround;
+    if (moving) {
+      this.moveDustCd -= dt;
+      if (this.moveDustCd <= 0) {
+        this.moveDustCd = 0.12;
+        this.spawnHitParticles(this.playerPos.clone().setY(0.05), 0xd8c8a0, 1);
+      }
     }
 
     this.fireCd = Math.max(0, this.fireCd - dt);
@@ -1763,7 +1807,9 @@ export class GameEngine {
     );
 
     // Muzzle flash
-    this.spawnHitParticles(origin, RAINBOW[this.rainbowIdx % RAINBOW.length], 4);
+    this.spawnHitParticles(origin, RAINBOW[this.rainbowIdx % RAINBOW.length], 5);
+    this.addTrauma(0.06);
+    this.pulseSquash(0.92);
     gameAudio.play("shoot");
 
     for (let i = 0; i < gun.projectiles; i++) {
@@ -1814,7 +1860,7 @@ export class GameEngine {
           if (!e.alive) continue;
           const dx = e.pos.x - b.pos.x;
           const dz = e.pos.z - b.pos.z;
-          if (dx * dx + dz * dz > (e.radius + 1.2) ** 2) continue;
+          if (dx * dx + dz * dz > (e.radius + 1.45) ** 2) continue;
           if (b.pos.y < -0.3 || b.pos.y > e.height + 1.2) continue;
           e.hp -= b.damage;
           e.hitFlash = 0.15;
@@ -1825,12 +1871,22 @@ export class GameEngine {
             e.alive = false;
             e.mesh.visible = false;
             this.killCount++;
-            this.save.coins += e.coin;
-            this.spawnFloat(e.pos.clone().setY(1.5), `+${e.coin}c`, "#ffe08a");
+            this.combo += 1;
+            this.comboTimer = 2.5;
+            const bonus = e.coin + Math.min(5, this.combo - 1);
+            this.save.coins += bonus;
+            this.spawnFloat(
+              e.pos.clone().setY(1.5),
+              this.combo > 1 ? `x${this.combo} +${bonus}c` : `+${bonus}c`,
+              "#ffe08a",
+            );
+            this.addTrauma(0.35);
+            this.addHitstop(0.05);
+            this.pulseSquash(1.15);
             gameAudio.play("kill");
-            /* quiet */
           } else {
             gameAudio.play("hit");
+            this.addTrauma(0.12);
             this.spawnFloat(e.pos.clone().setY(1.2), "Hit!", "#fff");
           }
           break;
@@ -2033,7 +2089,8 @@ export class GameEngine {
           }
           if (total > 0) {
             gameAudio.play("scoop");
-            /* quiet */
+            this.addTrauma(0.08);
+            this.pulseSquash(0.88);
           }
         }
       } else this.harvestProgress = Math.max(0, this.harvestProgress - dt * 2);
@@ -2121,6 +2178,8 @@ export class GameEngine {
             this.spawnFloat(this.market.pos.clone().setY(2), `+${pay}c`, "#ffe08a");
             this.serveCustomers(n);
             gameAudio.play("sell");
+            this.addTrauma(0.2);
+            this.pulseSquash(1.12);
             this.flashMessage(`+${pay}c`);
             writeSave(this.save);
           }
@@ -2537,6 +2596,10 @@ export class GameEngine {
       }
       writeSave(this.save);
       gameAudio.play("levelup");
+      this.addTrauma(0.5);
+      for (let i = 0; i < 24; i++) {
+        this.spawnHitParticles(this.playerPos.clone().setY(1.2), RAINBOW[i % RAINBOW.length], 2);
+      }
       this.flashMessage(`Quota cleared! Bonus +${bonus}c`);
       this.emitHud(true);
       return;
@@ -2571,6 +2634,19 @@ export class GameEngine {
       f.vy *= 0.98;
     }
     this.floats = this.floats.filter((f) => f.life > 0);
+  }
+
+
+  private addTrauma(amount: number) {
+    this.trauma = Math.min(1, this.trauma + amount);
+  }
+
+  private addHitstop(sec: number) {
+    this.hitstop = Math.max(this.hitstop, sec);
+  }
+
+  private pulseSquash(amount: number) {
+    this.squash = Math.max(0.55, Math.min(1.35, amount));
   }
 
   private spawnHitParticles(pos: THREE.Vector3, color: number, n = 6) {
@@ -2644,12 +2720,28 @@ export class GameEngine {
     this.computeMoveBasis();
     const dist = 14;
     const height = 10.5 + this.pitch * 2.5;
-    this.camTarget.set(this.playerPos.x, this.playerPos.y + 0.4, this.playerPos.z);
-    this.camPos.set(
-      this.playerPos.x - this.forward.x * dist,
-      this.playerPos.y + height,
-      this.playerPos.z - this.forward.z * dist,
+    // Lookahead in move direction
+    const look = 1.2;
+    this.camLookAhead.set(this.playerVel.x, 0, this.playerVel.z);
+    if (this.camLookAhead.lengthSq() > 0.01) this.camLookAhead.normalize().multiplyScalar(look);
+    this.camTarget.set(
+      this.playerPos.x + this.camLookAhead.x,
+      this.playerPos.y + 0.4,
+      this.playerPos.z + this.camLookAhead.z,
     );
+    this.camPos.set(
+      this.playerPos.x - this.forward.x * dist + this.camLookAhead.x * 0.3,
+      this.playerPos.y + height,
+      this.playerPos.z - this.forward.z * dist + this.camLookAhead.z * 0.3,
+    );
+    // trauma² screenshake
+    const shake = this.trauma * this.trauma;
+    if (shake > 0.001) {
+      const t = this.clock.elapsedTime * 40;
+      this.camPos.x += Math.sin(t * 1.7) * shake * 0.35;
+      this.camPos.y += Math.cos(t * 2.1) * shake * 0.22;
+      this.camPos.z += Math.sin(t * 1.3) * shake * 0.35;
+    }
     const lerp = 1 - Math.exp(-8 * delta);
     this.camera.position.lerp(this.camPos, lerp);
     this.camera.lookAt(this.camTarget);
@@ -2761,7 +2853,7 @@ export class GameEngine {
   }
 
   private spawnStars(rng: () => number) {
-    const n = 8 + Math.floor(this.level.id * 1.5);
+    const n = 12 + Math.floor(this.level.id * 2);
     for (let i = 0; i < n; i++) {
       const mat = new THREE.MeshStandardMaterial({
         color: 0xffe14a,

@@ -310,10 +310,10 @@ export function GameApp() {
               type="button"
               data-action="buy"
               data-arg={o.id}
-              className={`world-buy absolute z-40 pointer-events-auto rounded-xl px-2.5 py-1.5 text-[11px] font-bold shadow-lg border min-h-10 active:scale-95 ${
+              className={`world-buy absolute z-40 pointer-events-auto rounded-xl px-3 py-2 text-xs font-bold shadow-lg border min-h-11 active:scale-95 transition-transform ${
                 o.canAfford
-                  ? "bg-accent text-accent-fg border-white/30"
-                  : "bg-surface-2/90 text-muted border-border"
+                  ? "bg-accent text-accent-fg border-white/40 shadow-accent/30"
+                  : "bg-surface-2/95 text-muted border-border opacity-80"
               }`}
               style={{
                 left: `${o.x}%`,
@@ -339,28 +339,28 @@ export function GameApp() {
             </div>
           </div>
           <div className="flex flex-col items-center gap-1">
-            {/* Icon pipeline — no words */}
-            <div className="flex gap-1 text-base leading-none">
+            {/* Pipeline counters — color dots, no emoji */}
+            <div className="flex gap-1 items-end">
               {[
-                { v: hud.raw, i: "💩", hot: hud.nextStep === 1 },
-                { v: hud.washed, i: "🫧", hot: hud.nextStep === 2 },
-                { v: hud.glitter, i: "✨", hot: hud.nextStep === 3 },
-                { v: hud.boxed, i: "🎁", hot: hud.nextStep === 4 },
-                { v: hud.sold, i: "💰", hot: hud.nextStep === 5 },
+                { v: hud.raw, color: "bg-pink-400", hot: hud.nextStep === 1 },
+                { v: hud.washed, color: "bg-sky-400", hot: hud.nextStep === 2 },
+                { v: hud.glitter, color: "bg-violet-400", hot: hud.nextStep === 3 },
+                { v: hud.boxed, color: "bg-amber-400", hot: hud.nextStep === 4 },
+                { v: hud.sold, color: "bg-yellow-300", hot: hud.nextStep === 5 },
               ].map((s, idx) => (
                 <div
                   key={idx}
-                  className={`rounded-md px-1.5 py-0.5 text-center ${
-                    s.hot ? "bg-accent/30 ring-1 ring-accent" : "bg-bg/70"
+                  className={`rounded-lg min-w-9 px-1.5 py-1 text-center border ${
+                    s.hot ? "border-accent bg-accent/25 scale-110" : "border-border bg-bg/70"
                   }`}
                 >
-                  <div>{s.i}</div>
-                  <div className="text-[10px] tabular font-bold text-fg">{s.v}</div>
+                  <div className={`mx-auto h-1.5 w-1.5 rounded-full ${s.color}`} />
+                  <div className="text-[10px] tabular font-bold text-fg mt-0.5">{s.v}</div>
                 </div>
               ))}
             </div>
-            <div className="w-28 h-1.5 rounded-full bg-bg/80 overflow-hidden">
-              <div className="h-full bg-gold" style={{ width: `${quotaPct}%` }} />
+            <div className="w-32 h-1.5 rounded-full bg-bg/80 overflow-hidden">
+              <div className="h-full bg-gold transition-[width] duration-300" style={{ width: `${quotaPct}%` }} />
             </div>
           </div>
           <div className="flex gap-1.5 pointer-events-auto">
@@ -469,7 +469,7 @@ export function GameApp() {
         <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-gradient-to-b from-[#2a1840]/70 to-[#1a1028]/85 pointer-events-auto overflow-y-auto">
           <div className="w-full max-w-lg rounded-2xl border border-border bg-surface/95 p-5 shadow-2xl">
             <h1 className="text-2xl font-black text-center text-fg tracking-tight">Booloobee</h1>
-            <p className="text-center text-subtle text-sm mt-1">Pink unicorn poop · glitter · sell</p>
+            <p className="text-center text-subtle text-sm mt-1">Ranch · glitter pipeline · rainbows</p>
 
             <div className="mt-4">
               <div className="text-xs text-muted mb-2 text-center">Pick a character</div>
