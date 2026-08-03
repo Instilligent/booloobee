@@ -970,6 +970,27 @@ export class GameEngine {
         this.scene.add(post);
       }
     }
+
+    // Corner flags
+    for (const [fx, fz] of [[-hw + 1, -hd + 1], [hw - 1, -hd + 1], [-hw + 1, hd - 1], [hw - 1, hd - 1]] as const) {
+      const pole = new THREE.Mesh(this.geo.cyl, this.mats.fence);
+      pole.scale.set(0.08, 2.2, 0.08);
+      pole.position.set(fx, 1.1, fz);
+      this.scene.add(pole);
+      const flag = new THREE.Mesh(
+        this.geo.box,
+        new THREE.MeshStandardMaterial({
+          color: RAINBOW[Math.abs(Math.floor(fx + fz)) % RAINBOW.length],
+          emissive: RAINBOW[0],
+          emissiveIntensity: 0.2,
+        }),
+      );
+      flag.scale.set(0.7, 0.4, 0.05);
+      flag.position.set(fx + 0.35, 1.9, fz);
+      flag.name = "spin";
+      this.scene.add(flag);
+      this.spinParts.push(flag);
+    }
     const wallT = 0.6;
     this.solids.push(
       { minX: -hw - wallT, maxX: hw + wallT, minY: 0, maxY: 3, minZ: -hd - wallT, maxZ: -hd },
@@ -1841,10 +1862,11 @@ export class GameEngine {
       bullet.active = true;
       bullet.pos.copy(origin);
       bullet.vel.copy(dir).multiplyScalar(gun.bulletSpeed);
-      bullet.life = 1.5;
+      bullet.life = 1.65;
       bullet.damage = gun.damage;
       bullet.mesh.visible = true;
       bullet.mesh.position.copy(origin);
+      bullet.mesh.scale.setScalar(0.28);
       const bm = bullet.mesh.material as THREE.MeshStandardMaterial;
       bm.color.setHex(color);
       bm.emissive.setHex(color);
@@ -2190,6 +2212,7 @@ export class GameEngine {
             this.save.totalSold += n;
             const pay = this.sellPrice() * n;
             this.save.coins += pay;
+            this.health = Math.min(this.maxHealth, this.health + 2 * n);
             this.spawnHitParticles(this.market.pos.clone().setY(1.2), 0xff9acc, 12);
             this.spawnFloat(this.market.pos.clone().setY(2), `+${pay}c`, "#ffe08a");
             this.serveCustomers(n);

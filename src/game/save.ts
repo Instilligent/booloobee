@@ -6,7 +6,7 @@ const LEGACY = "booloobee-save-v1";
 export function defaultSave(): SaveData {
   return {
     version: 2,
-    coins: 40, // pilot-friendly starting coins for hires
+    coins: 55, // pilot-friendly starting coins for hires
     gunTier: 0,
     upgrades: {},
     highestLevel: 1,

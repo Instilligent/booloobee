@@ -30,8 +30,8 @@ class GameAudio {
   private unlocked = false;
   private muted = false;
   private musicNodes: { stop: () => void } | null = null;
-  private sfxVolume = 0.55;
-  private musicVolume = 0.12;
+  private sfxVolume = 0.62;
+  private musicVolume = 0.1;
 
   get isMuted() {
     return this.muted;

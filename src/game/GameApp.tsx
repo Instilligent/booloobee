@@ -435,7 +435,7 @@ export function GameApp() {
             <button
               type="button"
               className={`rounded-2xl font-black text-sm shadow-xl min-h-[16vmin] min-w-[16vmin] max-h-24 max-w-24 active:scale-95 ${
-                canUse ? "bg-accent text-accent-fg" : "bg-surface-2/90 text-muted"
+                canUse ? "bg-accent text-accent-fg ring-2 ring-white/50 animate-pulse" : "bg-surface-2/90 text-muted"
               }`}
               style={{ touchAction: "none" }}
               onTouchStart={(e) => {
@@ -454,7 +454,7 @@ export function GameApp() {
             </button>
             <button
               type="button"
-              className="rounded-2xl bg-pink-500 text-white font-black text-sm shadow-xl min-h-[16vmin] min-w-[16vmin] max-h-24 max-w-24 active:scale-95"
+              className="rounded-2xl bg-pink-500 text-white font-black text-sm shadow-xl min-h-[16vmin] min-w-[16vmin] max-h-24 max-w-24 active:scale-95 border-2 border-white/30"
               style={{ touchAction: "none" }}
               onTouchStart={(e) => {
                 e.preventDefault();
