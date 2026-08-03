@@ -248,6 +248,7 @@ export class GameEngine {
   private comboTimer = 0;
   private camLookAhead = new THREE.Vector3();
   private guideArrow: THREE.Mesh | null = null;
+  private reducedMotion = false;
   private fireflies: { mesh: THREE.Mesh; base: THREE.Vector3; phase: number }[] = [];
   private floats: FloatWorld[] = [];
   private nextFloatId = 1;
@@ -327,6 +328,11 @@ export class GameEngine {
     this.mount = mount;
     this.cbs = cbs;
     this.save = loadSave();
+    try {
+      this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch {
+      this.reducedMotion = false;
+    }
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -2708,10 +2714,12 @@ export class GameEngine {
 
 
   private addTrauma(amount: number) {
+    if (this.reducedMotion) amount *= 0.15;
     this.trauma = Math.min(1, this.trauma + amount);
   }
 
   private addHitstop(sec: number) {
+    if (this.reducedMotion) return;
     this.hitstop = Math.max(this.hitstop, sec);
   }
 
