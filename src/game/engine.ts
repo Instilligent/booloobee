@@ -560,7 +560,7 @@ export class GameEngine {
 
   private applyPlayerStatsFromSave() {
     this.maxHealth = 100 + this.up("max_health") * 25;
-    this.moveSpeed = 7.2 * (1 + this.up("move_speed") * 0.1);
+    this.moveSpeed = 7.6 * (1 + this.up("move_speed") * 0.11);
     if (this.health > this.maxHealth) this.health = this.maxHealth;
   }
   private up(id: string) {
@@ -814,7 +814,7 @@ export class GameEngine {
     this.health = this.maxHealth;
 
     this.scene.background = new THREE.Color(0x8ec8e8);
-    this.scene.fog = new THREE.Fog(0x8ec8e8, 40, 110);
+    this.scene.fog = new THREE.Fog(0x8ec8e8, 45, 125);
     this.buildLights();
 
     const w = this.level.width;
@@ -2527,8 +2527,8 @@ export class GameEngine {
           const dz = w.targetCrop.pos.z - w.pos.z;
           const dist = Math.hypot(dx, dz);
           if (dist > 0.55) {
-            w.pos.x += (dx / dist) * 3.4 * dt;
-            w.pos.z += (dz / dist) * 3.4 * dt;
+            w.pos.x += (dx / dist) * 3.8 * dt;
+            w.pos.z += (dz / dist) * 3.8 * dt;
             w.mesh.rotation.y = Math.atan2(dx, dz);
           } else {
             w.workTimer += dt;
@@ -2668,7 +2668,7 @@ export class GameEngine {
       pos: pos.clone(),
       life: 1.15,
       maxLife: 1.15,
-      vy: 1.6,
+      vy: 1.9,
     });
     if (this.floats.length > 28) this.floats.shift();
   }
@@ -3102,9 +3102,10 @@ export class GameEngine {
       if (d.kind === "fountain") {
         d.cd = 4;
         const before = this.health;
-        this.health = Math.min(this.maxHealth, this.health + 25);
+        this.health = Math.min(this.maxHealth, this.health + 30);
         const gained = Math.floor(this.health - before);
-        this.spawnHitParticles(d.pos.clone().setY(1), 0x6ed4ff, 10);
+        this.addTrauma(0.1);
+        this.spawnHitParticles(d.pos.clone().setY(1), 0x6ed4ff, 14);
         this.spawnFloat(d.pos.clone().setY(1.8), gained > 0 ? `+${gained} HP` : "Full!", "#6ed4ff");
         gameAudio.play("spa");
         return;
@@ -3113,7 +3114,7 @@ export class GameEngine {
         d.cd = 0.8;
         const n = Math.min(2, this.raw);
         this.raw -= n;
-        const pay = n * 2;
+        const pay = n * 3;
         this.save.coins += pay;
         this.spawnFloat(d.pos.clone().setY(1.5), `Compost +${pay}c`, "#7ad46a");
         gameAudio.play("pop");
@@ -3122,13 +3123,14 @@ export class GameEngine {
       }
       if (d.kind === "jukebox") {
         d.cd = 5;
-        this.save.coins += 5;
+        this.save.coins += 6;
         // Happy customers tip
         for (const c of this.customers.slice(0, 2)) {
           if (c.state === "queue") this.spawnFloat(c.pos.clone().setY(1.5), "♪", "#ff9acc");
         }
         this.spawnHitParticles(d.pos.clone().setY(1.2), 0xff4d94, 12);
-        this.spawnFloat(d.pos.clone().setY(2), "+5c tips", "#ff9acc");
+        this.spawnFloat(d.pos.clone().setY(2), "+6c tips", "#ff9acc");
+        this.addTrauma(0.15);
         gameAudio.play("thanks");
         writeSave(this.save);
         return;

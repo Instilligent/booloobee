@@ -9,6 +9,7 @@ Pipeline: change → `node scripts/e2e-game.mjs` → `git push` on success.
 3. **Pilot + pilot ease** — flags, sell-heals-HP, start coins, USE pulse, SFX  
 4. **Presentation** — day-cycle sky, star pay scale, level toast, upgrade L/max labels  
 5. **Feel + mobile** — knockback, hurt juice, wider interact, cheaper farmer, safe-area insets  
+6. **Loop polish** — fountain/jukebox/compost rewards, worker speed, fog, move speed, gun base, toast style  
 
 ## Research applied
 

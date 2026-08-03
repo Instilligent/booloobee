@@ -26,8 +26,8 @@ export function characterDef(id: CharacterId): CharacterDef {
 export const GUN_TIERS: Record<GunTier, GunStats> = {
   0: {
     name: "Sparkle Sprinkler",
-    damage: 32,
-    fireRate: 4.0,
+    damage: 34,
+    fireRate: 4.2,
     bulletSpeed: 38,
     spread: 0.02,
     projectiles: 1,

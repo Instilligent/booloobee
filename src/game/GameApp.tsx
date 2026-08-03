@@ -408,7 +408,7 @@ export function GameApp() {
       {/* Short toast only */}
       {playing && hud.message && (
         <div className="absolute top-[14%] inset-x-0 z-20 flex justify-center pointer-events-none px-4">
-          <div className="rounded-full bg-bg/85 text-fg text-sm font-semibold px-4 py-1.5 shadow border border-border">
+          <div className="rounded-full bg-bg/90 text-fg text-sm font-semibold px-4 py-1.5 shadow-lg border border-accent/40 backdrop-blur-sm">
             {hud.message}
           </div>
         </div>
