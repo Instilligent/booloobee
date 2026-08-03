@@ -78,7 +78,7 @@ export const UPGRADES: UpgradeDef[] = [
     name: "Farmer",
     shortName: "Farmer",
     description: "Scoops for you.",
-    baseCost: 35,
+    baseCost: 30,
     costScale: 1.55,
     maxLevel: 3,
     worldShop: true,

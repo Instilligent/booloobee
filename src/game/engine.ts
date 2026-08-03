@@ -26,7 +26,7 @@ import type {
 const FIXED = 1 / 60;
 const PLAYER_RADIUS = 0.45;
 const PLAYER_HEIGHT = 1.55;
-const INTERACT_RANGE = 3.6;
+const INTERACT_RANGE = 4.0;
 const SCOOP_RADIUS = 4.6;
 
 interface Crop {
@@ -1891,6 +1891,10 @@ export class GameEngine {
           if (b.pos.y < -0.3 || b.pos.y > e.height + 1.2) continue;
           e.hp -= b.damage;
           e.hitFlash = 0.15;
+          // light knockback (feel only)
+          const kdist = Math.hypot(dx, dz) || 1;
+          e.pos.x -= (dx / kdist) * 0.35;
+          e.pos.z -= (dz / kdist) * 0.35;
           b.active = false;
           b.mesh.visible = false;
           this.spawnHitParticles(b.pos, 0xffffff, 8);
@@ -2069,6 +2073,8 @@ export class GameEngine {
     gameAudio.play("hurt");
     this.health -= dmg;
     this.hurtCd = 0.9;
+    this.addTrauma(0.4);
+    this.pulseSquash(0.7);
     this.spawnHitParticles(this.playerPos.clone().setY(1.2), 0xd46a5c, 6);
     if (this.health <= 0) {
       this.health = 0;

@@ -335,7 +335,7 @@ export function GameApp() {
 
       {/* Minimal top bar */}
       {playing && (
-        <div className="absolute top-0 inset-x-0 z-20 pointer-events-none p-2 flex items-start justify-between gap-2">
+        <div className="absolute top-0 inset-x-0 z-20 pointer-events-none p-2 pt-[max(0.5rem,env(safe-area-inset-top))] flex items-start justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="hud-chip !py-1.5 !px-2.5 tabular text-sm font-bold text-gold">
               {hud.coins}c
@@ -433,7 +433,7 @@ export function GameApp() {
               }}
             />
           </div>
-          <div className="absolute bottom-4 right-4 flex gap-3 pointer-events-auto">
+          <div className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] flex gap-3 pointer-events-auto">
             <button
               type="button"
               className={`rounded-2xl font-black text-sm shadow-xl min-h-[16vmin] min-w-[16vmin] max-h-24 max-w-24 active:scale-95 ${
