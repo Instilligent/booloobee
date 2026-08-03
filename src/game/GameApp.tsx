@@ -60,6 +60,7 @@ export function GameApp() {
   const [hintDismissed, setHintDismissed] = useState(false);
   const lastTap = useRef(0);
   const stickId = useRef<number | null>(null);
+  const [stickKnob, setStickKnob] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     gameAudio.loadMutePref();
@@ -200,6 +201,7 @@ export function GameApp() {
     const nx = Math.max(-1, Math.min(1, (t.clientX - cx) / max));
     const ny = Math.max(-1, Math.min(1, (cy - t.clientY) / max));
     engineRef.current?.setTouchMove(nx, ny);
+    setStickKnob({ x: nx, y: ny });
   };
   const onStickMove = (e: React.TouchEvent) => {
     const t = Array.from(e.changedTouches).find((x) => x.identifier === stickId.current);
@@ -211,12 +213,14 @@ export function GameApp() {
     const nx = Math.max(-1, Math.min(1, (t.clientX - cx) / max));
     const ny = Math.max(-1, Math.min(1, (cy - t.clientY) / max));
     engineRef.current?.setTouchMove(nx, ny);
+    setStickKnob({ x: nx, y: ny });
   };
   const onStickEnd = (e: React.TouchEvent) => {
     const t = Array.from(e.changedTouches).find((x) => x.identifier === stickId.current);
     if (!t) return;
     stickId.current = null;
     engineRef.current?.setTouchMove(0, 0);
+    setStickKnob({ x: 0, y: 0 });
   };
 
   // Look: drag right half of screen
@@ -419,7 +423,13 @@ export function GameApp() {
             onTouchEnd={onStickEnd}
             onTouchCancel={onStickEnd}
           >
-            <div className="absolute inset-[32%] rounded-full bg-white/35" />
+            <div
+              className="absolute w-[36%] h-[36%] rounded-full bg-white/50 border border-white/40 shadow-md"
+              style={{
+                left: `calc(50% + ${stickKnob.x * 28}% - 18%)`,
+                top: `calc(50% - ${stickKnob.y * 28}% - 18%)`,
+              }}
+            />
           </div>
           <div className="absolute bottom-4 right-4 flex gap-3 pointer-events-auto">
             <button

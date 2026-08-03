@@ -27,7 +27,7 @@ const FIXED = 1 / 60;
 const PLAYER_RADIUS = 0.45;
 const PLAYER_HEIGHT = 1.55;
 const INTERACT_RANGE = 3.6;
-const SCOOP_RADIUS = 4.0;
+const SCOOP_RADIUS = 4.6;
 
 interface Crop {
   id: number;
@@ -247,6 +247,7 @@ export class GameEngine {
   private combo = 0;
   private comboTimer = 0;
   private camLookAhead = new THREE.Vector3();
+  private fireflies: { mesh: THREE.Mesh; base: THREE.Vector3; phase: number }[] = [];
   private floats: FloatWorld[] = [];
   private nextFloatId = 1;
   private decorRings: THREE.Mesh[] = [];
@@ -617,6 +618,7 @@ export class GameEngine {
     this.trees = [];
     this.flowers = [];
     this.fairyLights = [];
+    this.fireflies = [];
     this.floats = [];
     this.decorRings = [];
     this.clouds = [];
@@ -729,14 +731,16 @@ export class GameEngine {
     }
   }
 
-  private addRingMarker(pos: THREE.Vector3, color: number) {
+  private addRingMarker(pos: THREE.Vector3, color: number, step = 0) {
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(1.6, 1.85, 32),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
     );
     ring.rotation.x = -Math.PI / 2;
     ring.position.set(pos.x, 0.04, pos.z);
     ring.userData.pulse = Math.random() * Math.PI * 2;
+    ring.userData.step = step;
+    ring.userData.baseColor = color;
     this.scene.add(ring);
     this.decorRings.push(ring);
   }
@@ -877,12 +881,13 @@ export class GameEngine {
     this.packer = this.makeBuilding("packer", this.level.packer, this.makePackerMesh(), 1.3);
     this.market = this.makeBuilding("market", this.level.market, this.makeMarketMesh(), 1.4);
 
-    this.addRingMarker(this.spa.pos, 0x4ec8ff);
-    this.addRingMarker(this.processor.pos, 0x7b5cff);
-    this.addRingMarker(this.packer.pos, 0xffc84a);
-    this.addRingMarker(this.market.pos, 0xff8ec8);
+    this.addRingMarker(this.spa.pos, 0x4ec8ff, 2);
+    this.addRingMarker(this.processor.pos, 0x7b5cff, 3);
+    this.addRingMarker(this.packer.pos, 0xffc84a, 4);
+    this.addRingMarker(this.market.pos, 0xff8ec8, 5);
 
     const field = new THREE.Vector3(0, 0, this.level.spawn.z * 0.5);
+    this.addRingMarker(field, 0xff8ec8, 1);
     this.addChainPath(field, this.spa.pos);
     this.addChainPath(this.spa.pos, this.processor.pos);
     this.addChainPath(this.processor.pos, this.packer.pos);
@@ -1778,7 +1783,7 @@ export class GameEngine {
     // Aim: prefer nearest pest (top-down friendly), else body forward
     let aim = this.bodyForward(this.tmpV2).clone();
     let best: Enemy | null = null;
-    let bestD = 18;
+    let bestD = 22;
     for (const e of this.enemies) {
       if (!e.alive) continue;
       const d = Math.hypot(e.pos.x - this.playerPos.x, e.pos.z - this.playerPos.z);
@@ -1867,6 +1872,7 @@ export class GameEngine {
           b.active = false;
           b.mesh.visible = false;
           this.spawnHitParticles(b.pos, 0xffffff, 8);
+          this.spawnHitParticles(b.pos, RAINBOW[this.rainbowIdx % RAINBOW.length], 6);
           if (e.hp <= 0) {
             e.alive = false;
             e.mesh.visible = false;
@@ -1994,8 +2000,18 @@ export class GameEngine {
         e.pos.x = tx - (dx / dist) * stopAt;
         e.pos.z = tz - (dz / dist) * stopAt;
       }
-      e.mesh.position.set(e.pos.x, 0, e.pos.z);
+      e.mesh.position.set(e.pos.x, Math.sin(this.clock.elapsedTime * 4 + e.id) * 0.06, e.pos.z);
       e.mesh.rotation.y = Math.atan2(dx, dz);
+      if (e.hitFlash > 0) {
+        e.hitFlash -= dt;
+        e.mesh.traverse((ch: THREE.Object3D) => {
+          const m = (ch as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+          if (m && m.emissive) {
+            m.emissive.setHex(e.hitFlash > 0 ? 0xffffff : 0x000000);
+            m.emissiveIntensity = e.hitFlash > 0 ? 0.8 : 0;
+          }
+        });
+      }
 
       const pdist = Math.hypot(this.playerPos.x - e.pos.x, this.playerPos.z - e.pos.z);
       if (pdist < stopAt + 0.4 && e.attackCd <= 0) {
@@ -2688,9 +2704,13 @@ export class GameEngine {
     for (const cloud of this.clouds) {
       cloud.position.x = cloud.userData.baseX + Math.sin(t * cloud.userData.drift) * 3;
     }
+    const step = this.screen === "playing" ? this.nextStep() : 0;
     for (const ring of this.decorRings) {
-      const pulse = 1 + Math.sin(t * 2.5 + (ring.userData.pulse || 0)) * 0.08;
+      const isHot = ring.userData.step === step;
+      const pulse = 1 + Math.sin(t * (isHot ? 4.5 : 2.2) + (ring.userData.pulse || 0)) * (isHot ? 0.18 : 0.06);
       ring.scale.set(pulse, pulse, pulse);
+      const mat = ring.material as THREE.MeshBasicMaterial;
+      mat.opacity = isHot ? 0.9 : 0.4;
     }
     for (const part of this.spinParts) part.rotation.y += delta * 2.5;
     for (const fl of this.fairyLights) {
@@ -2698,6 +2718,14 @@ export class GameEngine {
     }
     for (const flower of this.flowers) {
       flower.position.y = 0.12 + Math.sin(t * 2 + flower.position.x) * 0.03;
+    }
+    for (const ff of this.fireflies) {
+      ff.mesh.position.x = ff.base.x + Math.sin(t * 1.2 + ff.phase) * 0.6;
+      ff.mesh.position.z = ff.base.z + Math.cos(t * 0.9 + ff.phase) * 0.6;
+      ff.mesh.position.y = ff.base.y + Math.sin(t * 2.2 + ff.phase) * 0.35;
+      const mat = ff.mesh.material as THREE.MeshBasicMaterial;
+      mat.opacity = 0.5 + Math.sin(t * 5 + ff.phase) * 0.4;
+      mat.transparent = true;
     }
     for (const c of this.crops) {
       if (c.harvested) continue;
@@ -2840,6 +2868,19 @@ export class GameEngine {
         this.scene.add(bulb);
       }
     }
+
+    // Ambient fireflies
+    for (let i = 0; i < 18; i++) {
+      const mesh = new THREE.Mesh(
+        this.geo.sphere,
+        new THREE.MeshBasicMaterial({ color: 0xffe8a0 }),
+      );
+      mesh.scale.setScalar(0.06);
+      const base = new THREE.Vector3((rng() - 0.5) * w * 0.7, 0.8 + rng() * 1.5, (rng() - 0.5) * d * 0.7);
+      mesh.position.copy(base);
+      this.scene.add(mesh);
+      this.fireflies.push({ mesh, base, phase: rng() * Math.PI * 2 });
+    }
     // Checkered picnic rugs
     for (let i = 0; i < 3; i++) {
       const rug = new THREE.Mesh(
@@ -2972,7 +3013,15 @@ export class GameEngine {
       s.spin += dt * 3;
       s.mesh.rotation.y = s.spin;
       s.mesh.position.y = 0.7 + Math.sin(t * 3 + s.spin) * 0.15;
-      if (Math.hypot(s.pos.x - this.playerPos.x, s.pos.z - this.playerPos.z) < 1.2) {
+      // soft magnet
+      const sd = Math.hypot(s.pos.x - this.playerPos.x, s.pos.z - this.playerPos.z);
+      if (sd < 3.2 && sd > 0.01) {
+        s.pos.x += ((this.playerPos.x - s.pos.x) / sd) * dt * 4.5;
+        s.pos.z += ((this.playerPos.z - s.pos.z) / sd) * dt * 4.5;
+        s.mesh.position.x = s.pos.x;
+        s.mesh.position.z = s.pos.z;
+      }
+      if (sd < 1.35) {
         s.taken = true;
         s.mesh.visible = false;
         this.save.coins += 3;
