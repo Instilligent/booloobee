@@ -555,6 +555,16 @@ export function GameApp() {
             <button type="button" data-action="resume" className="w-full rounded-xl bg-accent text-accent-fg py-3 font-bold min-h-12 inline-flex items-center justify-center gap-2">
               <Play className="h-4 w-4" /> Resume
             </button>
+            <button
+              type="button"
+              className="w-full rounded-xl border border-border py-3 font-semibold min-h-12"
+              onClick={() => {
+                gameAudio.unlock();
+                setMuted(gameAudio.toggleMute());
+              }}
+            >
+              {muted ? "Unmute" : "Mute"} sound
+            </button>
             <button type="button" data-action="title" className="w-full rounded-xl border border-border py-3 font-semibold min-h-12">
               Home
             </button>

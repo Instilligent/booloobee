@@ -247,6 +247,7 @@ export class GameEngine {
   private combo = 0;
   private comboTimer = 0;
   private camLookAhead = new THREE.Vector3();
+  private guideArrow: THREE.Mesh | null = null;
   private fireflies: { mesh: THREE.Mesh; base: THREE.Vector3; phase: number }[] = [];
   private floats: FloatWorld[] = [];
   private nextFloatId = 1;
@@ -619,6 +620,7 @@ export class GameEngine {
     this.flowers = [];
     this.fairyLights = [];
     this.fireflies = [];
+    this.guideArrow = null;
     this.floats = [];
     this.decorRings = [];
     this.clouds = [];
@@ -860,6 +862,22 @@ export class GameEngine {
     this.placeBuildings();
     this.initPileGroups();
     this.decorateRanch(rng);
+    {
+      const arrow = new THREE.Mesh(
+        this.geo.cone,
+        new THREE.MeshStandardMaterial({
+          color: 0xffe14a,
+          emissive: 0xffaa00,
+          emissiveIntensity: 0.55,
+          transparent: true,
+          opacity: 0.85,
+        }),
+      );
+      arrow.scale.set(0.35, 0.55, 0.35);
+      arrow.rotation.x = Math.PI;
+      this.scene.add(arrow);
+      this.guideArrow = arrow;
+    }
     this.spawnStars(rng);
     this.spawnExtraStations();
 
@@ -2262,6 +2280,11 @@ export class GameEngine {
       }
     }
 
+    // Station "working" bob
+    if (this.spa?.mesh) this.spa.mesh.position.y = this.spa.buffer > 0 ? Math.sin(this.clock.elapsedTime * 6) * 0.04 : 0;
+    if (this.processor?.mesh) this.processor.mesh.position.y = this.processor.buffer > 0 ? Math.sin(this.clock.elapsedTime * 8) * 0.05 : 0;
+    if (this.packer?.mesh) this.packer.mesh.position.y = this.packer.buffer > 0 ? Math.sin(this.clock.elapsedTime * 5) * 0.04 : 0;
+
     if (this.spa.buffer > 0) {
       this.spa.progress += this.spaRate() * dt * 0.55;
       if (this.spa.progress >= 1) {
@@ -2427,6 +2450,7 @@ export class GameEngine {
       if (c.state !== "queue" && c.state !== "buy") continue;
       c.state = "leave";
       c.timer = 0;
+      c.mesh.scale.setScalar(1.08);
       this.spawnFloat(c.pos.clone().setY(1.6), "Thanks!", "#ffe08a");
       gameAudio.play("thanks");
       left--;
@@ -2748,6 +2772,19 @@ export class GameEngine {
     }
     for (const flower of this.flowers) {
       flower.position.y = 0.12 + Math.sin(t * 2 + flower.position.x) * 0.03;
+    }
+    if (this.guideArrow && this.screen === "playing") {
+      const step = this.nextStep();
+      let target = this.playerPos;
+      if (step === 1) target = new THREE.Vector3(0, 0, this.level.spawn.z * 0.55);
+      else if (step === 2) target = this.spa.pos;
+      else if (step === 3) target = this.processor.pos;
+      else if (step === 4) target = this.packer.pos;
+      else target = this.market.pos;
+      this.guideArrow.position.set(target.x, 2.8 + Math.sin(t * 3) * 0.2, target.z);
+      this.guideArrow.visible = true;
+    } else if (this.guideArrow) {
+      this.guideArrow.visible = false;
     }
     for (const ff of this.fireflies) {
       ff.mesh.position.x = ff.base.x + Math.sin(t * 1.2 + ff.phase) * 0.6;
