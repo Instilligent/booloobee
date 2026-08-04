@@ -1,13 +1,10 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 /**
- * iOS shell config for Booloobee Ranch.
- * Install when ready: npm i -D @capacitor/cli @capacitor/core @capacitor/ios
- * Then: npx cap init booloobee com.instilligent.booloobee --web-dir dist
- *       npx cap add ios && npx cap sync ios
+ * Booloobee Ranch — iOS-first (landscape locked in Info.plist via
+ * scripts/patch-ios-landscape.mjs after `npx cap add ios`).
  *
- * StoreKit bridge: native plugin calls window.__booloobeeOnPurchase after finishTransaction.
- * See docs/IOS_APP_STORE.md for product IDs.
+ * Mac one-liner:  npm run ios:setup
  */
 const config: CapacitorConfig = {
   appId: "com.instilligent.booloobee",
@@ -20,11 +17,16 @@ const config: CapacitorConfig = {
     contentInset: "automatic",
     preferredContentMode: "mobile",
     backgroundColor: "#1a1028",
+    scheme: "Booloobee Ranch",
+  },
+  android: {
+    allowMixedContent: true,
   },
   plugins: {
     SplashScreen: {
       launchAutoHide: true,
       backgroundColor: "#1a1028",
+      showSpinner: false,
     },
   },
 };
