@@ -3,6 +3,7 @@ import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { gameAudio } from "./audio";
 import { GameEngine } from "./engine";
 import { installProgression } from "./installProgression";
+import { installVisualUpgrades } from "./visualUpgrades";
 import type { CharacterId, HudSnapshot } from "./types";
 import { TitleOverlay } from "./TitleOverlay";
 import { tryLockLandscape, isPortraitPhone } from "./orientation";
@@ -103,6 +104,7 @@ export function GameApp() {
     if (!el) return;
     const eng = new GameEngine(el, { onHud: (h) => setHud({ ...h }) });
     installProgression(eng);
+    installVisualUpgrades(eng);
     engineRef.current = eng;
     eng.setMobile(true);
     setCharacter(eng.getCharacter());
