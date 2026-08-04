@@ -5,6 +5,7 @@ import { GameEngine } from "./engine";
 import { installProgression } from "./installProgression";
 import type { CharacterId, HudSnapshot } from "./types";
 import { TitleOverlay } from "./TitleOverlay";
+import { tryLockLandscape, isPortraitPhone } from "./orientation";
 
 const emptyHud: HudSnapshot = {
   screen: "title",
@@ -82,11 +83,11 @@ export function GameApp() {
 
   useEffect(() => {
     const check = () => {
-      const portrait = window.innerHeight > window.innerWidth * 1.05;
-      const coarse =
-        typeof window !== "undefined" &&
-        (window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window);
-      setLandscapeHint(portrait && coarse && !hintDismissed);
+      if (!isPortraitPhone()) {
+        setLandscapeHint(false);
+        return;
+      }
+      setLandscapeHint(!hintDismissed);
     };
     check();
     window.addEventListener("resize", check);
@@ -126,18 +127,21 @@ export function GameApp() {
         gameAudio.unlock();
         gameAudio.play("ui");
         eng.setCharacter(character);
+        void tryLockLandscape();
         eng.startGame(0);
         break;
       case "continue":
         gameAudio.unlock();
         gameAudio.play("ui");
         eng.setCharacter(character);
+        void tryLockLandscape();
         eng.continueGame();
         break;
       case "startLevel":
         gameAudio.unlock();
         gameAudio.play("ui");
         eng.setCharacter(character);
+        void tryLockLandscape();
         if (arg) (eng as any).startLevel(Math.max(0, parseInt(arg, 10) - 1));
         break;
       case "daily":
@@ -282,17 +286,26 @@ export function GameApp() {
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#1a1028] select-none">
       <div ref={mountRef} className="absolute inset-0" />
 
-      {landscapeHint && hud.screen === "title" && (
-        <div className="absolute top-2 inset-x-2 z-[70] flex justify-center pointer-events-auto">
-          <div className="flex items-center gap-2 rounded-full bg-bg/90 border border-border px-3 py-2 shadow-lg max-w-md">
-            <span className="text-sm">\u21bb Landscape is easier</span>
+      {landscapeHint && (
+        <div className="absolute inset-0 z-[80] flex items-center justify-center bg-[#120e18]/92 pointer-events-auto p-6">
+          <div className="w-full max-w-sm rounded-2xl border border-accent/50 bg-surface p-6 text-center shadow-2xl">
+            <div className="text-5xl mb-3 animate-pulse" aria-hidden>
+              \ud83d\udcf1\u21bb
+            </div>
+            <div className="text-lg font-bold text-fg">Turn phone sideways</div>
+            <p className="mt-2 text-sm text-muted">
+              Landscape is required for the full controls. Rotate left or right \u2014 this screen closes when you do.
+            </p>
             <button
               type="button"
-              className="rounded-full bg-accent text-accent-fg text-xs font-bold px-3 py-1.5 min-h-9"
+              className="mt-5 w-full rounded-xl bg-accent text-accent-fg py-3 font-bold min-h-12"
               style={{ touchAction: "manipulation" }}
-              onClick={() => setHintDismissed(true)}
+              onClick={() => {
+                setHintDismissed(true);
+                void tryLockLandscape();
+              }}
             >
-              OK
+              Play in portrait anyway
             </button>
           </div>
         </div>
