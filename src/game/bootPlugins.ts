@@ -2,6 +2,7 @@ import { installProgression } from "./installProgression";
 import { installVisualUpgrades } from "./visualUpgrades";
 import { installDemandAndVariety } from "./demandAndVariety";
 import { installStationsClarity } from "./stationsClarity";
+import { installGameplayPolish } from "./gameplayPolish";
 
 /** One call from GameApp — keeps GameApp diff tiny. */
 export function installAllGamePlugins(eng: any) {
@@ -9,4 +10,5 @@ export function installAllGamePlugins(eng: any) {
   installVisualUpgrades(eng);
   installDemandAndVariety(eng);
   installStationsClarity(eng);
+  installGameplayPolish(eng);
 }
