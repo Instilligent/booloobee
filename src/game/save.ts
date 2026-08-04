@@ -12,6 +12,9 @@ export function defaultSave(): SaveData {
     highestLevel: 1,
     totalSold: 0,
     character: "rancher",
+    lastDailyClaim: undefined,
+    removeAds: false,
+    starterPack: false,
   };
 }
 
@@ -29,6 +32,10 @@ export function loadSave(): SaveData {
       gunTier: Math.min(4, Math.max(0, parsed.gunTier ?? 0)) as GunTier,
       character: (parsed.character as CharacterId) || "rancher",
       coins: typeof parsed.coins === "number" ? parsed.coins : base.coins,
+      highestLevel: Math.max(1, Math.min(18, parsed.highestLevel ?? 1)),
+      lastDailyClaim: parsed.lastDailyClaim,
+      removeAds: !!parsed.removeAds,
+      starterPack: !!parsed.starterPack,
     };
   } catch {
     return defaultSave();

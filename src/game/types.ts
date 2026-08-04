@@ -78,6 +78,11 @@ export interface SaveData {
   highestLevel: number;
   totalSold: number;
   character: CharacterId;
+  /** YYYY-MM-DD last daily bonus claim (Auckland) */
+  lastDailyClaim?: string;
+  /** Non-consumable IAP flags */
+  removeAds?: boolean;
+  starterPack?: boolean;
 }
 
 export interface FloatText {
@@ -138,4 +143,9 @@ export interface HudSnapshot {
   character: CharacterId;
   worldOffers: WorldOffer[];
   actionLabel: string;
+  /** Highest unlocked level id (1-based) */
+  highestLevel: number;
+  /** Act label for current level */
+  actTitle: string;
+  dailyAvailable: boolean;
 }
