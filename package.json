@@ -14,7 +14,11 @@
     "preview": "vite preview --host 0.0.0.0 --port 8080",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "cap:sync": "npx cap sync ios",
+    "cap:open": "npx cap open ios",
+    "ios:setup": "bash scripts/setup-ios-mac.sh",
+    "ios:landscape": "node scripts/patch-ios-landscape.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.3",
@@ -91,5 +95,5 @@
     "typescript-eslint": "^8.56.1",
     "vite": "^8.1.0"
   },
-  "description": "Booloobee Ranch \u2014 silly 3D sparkle-poop supply chain game"
+  "description": "Booloobee Ranch — silly 3D sparkle-poop supply chain game"
 }

@@ -33,9 +33,24 @@ Landscape phone or desktop. Sound unlocks on first tap.
 - Procedural audio, mobile-first controls
 - iOS path: `capacitor.config.ts` + `src/game/iap.ts` StoreKit stub
 
+## iOS (landscape lock)
+
+On a Mac with Xcode:
+
+```bash
+git pull
+npm run ios:setup
+npx cap open ios
+```
+
+In Xcode: **App** target → **General** → only **Landscape Left** + **Landscape Right**. Then Run.
+
+Full steps: [docs/CAPACITOR_IOS.md](docs/CAPACITOR_IOS.md).
+
 ## Docs
 
 - [iOS App Store & IAP](docs/IOS_APP_STORE.md)
+- [Capacitor iOS / landscape](docs/CAPACITOR_IOS.md)
 - [Advertising & ASO](docs/ADVERTISING.md)
 - [Product roadmap](docs/PRODUCT_ROADMAP.md)
 - [Improvement log](IMPROVEMENT_LOG.md)
