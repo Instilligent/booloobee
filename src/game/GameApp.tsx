@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
-import { CHARACTERS } from "./data";
 import { gameAudio } from "./audio";
 import { GameEngine } from "./engine";
+import { installProgression } from "./installProgression";
 import type { CharacterId, HudSnapshot } from "./types";
+import { TitleOverlay } from "./TitleOverlay";
 
 const emptyHud: HudSnapshot = {
   screen: "title",
@@ -33,11 +34,16 @@ const emptyHud: HudSnapshot = {
   character: "rancher",
   worldOffers: [],
   actionLabel: "USE",
+  highestLevel: 1,
+  actTitle: "",
+  dailyAvailable: true,
 };
 
 type Action =
   | "start"
   | "continue"
+  | "startLevel"
+  | "daily"
   | "resume"
   | "pause"
   | "title"
@@ -76,7 +82,6 @@ export function GameApp() {
 
   useEffect(() => {
     const check = () => {
-      // Soft tip only — never block the game
       const portrait = window.innerHeight > window.innerWidth * 1.05;
       const coarse =
         typeof window !== "undefined" &&
@@ -96,6 +101,7 @@ export function GameApp() {
     const el = mountRef.current;
     if (!el) return;
     const eng = new GameEngine(el, { onHud: (h) => setHud({ ...h }) });
+    installProgression(eng);
     engineRef.current = eng;
     eng.setMobile(true);
     setCharacter(eng.getCharacter());
@@ -127,6 +133,16 @@ export function GameApp() {
         gameAudio.play("ui");
         eng.setCharacter(character);
         eng.continueGame();
+        break;
+      case "startLevel":
+        gameAudio.unlock();
+        gameAudio.play("ui");
+        eng.setCharacter(character);
+        if (arg) (eng as any).startLevel(Math.max(0, parseInt(arg, 10) - 1));
+        break;
+      case "daily":
+        gameAudio.unlock();
+        (eng as any).claimDaily();
         break;
       case "resume":
         gameAudio.play("ui");
@@ -163,7 +179,6 @@ export function GameApp() {
     }
   }, [character]);
 
-  // Native capture for reliability on phone preview
   useEffect(() => {
     const fire = (action: Action, arg?: string) => {
       const now = performance.now();
@@ -223,7 +238,6 @@ export function GameApp() {
     setStickKnob({ x: 0, y: 0 });
   };
 
-  // Look: drag right half of screen
   useEffect(() => {
     if (hud.screen !== "playing") return;
     let id: number | null = null;
@@ -262,18 +276,16 @@ export function GameApp() {
   const hpPct = Math.max(0, (hud.health / Math.max(1, hud.maxHealth)) * 100);
   const quotaPct = Math.min(100, (hud.sold / Math.max(1, hud.quota)) * 100);
   const action = hud.actionLabel || "USE";
-  const canUse = !!hud.interactHint && hud.interactHint !== "…" && hud.interactHint !== null;
+  const canUse = !!hud.interactHint && hud.interactHint !== "\u2026" && hud.interactHint !== null;
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#1a1028] select-none">
-      {/* 3D canvas */}
       <div ref={mountRef} className="absolute inset-0" />
 
-      {/* Soft landscape tip — does NOT block Play */}
       {landscapeHint && hud.screen === "title" && (
         <div className="absolute top-2 inset-x-2 z-[70] flex justify-center pointer-events-auto">
           <div className="flex items-center gap-2 rounded-full bg-bg/90 border border-border px-3 py-2 shadow-lg max-w-md">
-            <span className="text-sm">↻ Landscape is easier</span>
+            <span className="text-sm">\u21bb Landscape is easier</span>
             <button
               type="button"
               className="rounded-full bg-accent text-accent-fg text-xs font-bold px-3 py-1.5 min-h-9"
@@ -286,7 +298,6 @@ export function GameApp() {
         </div>
       )}
 
-      {/* Float texts only */}
       {playing &&
         hud.floats.map((f) => (
           <div
@@ -304,7 +315,6 @@ export function GameApp() {
           </div>
         ))}
 
-      {/* In-world hire / buy buttons above shop */}
       {playing &&
         hud.worldOffers
           .filter((o) => o.visible)
@@ -328,12 +338,11 @@ export function GameApp() {
             >
               <span className="block leading-tight">{o.label}</span>
               <span className="tabular opacity-90 text-[10px]">
-                {o.cost}c · {o.level}/{o.maxLevel}
+                {o.cost}c \u00b7 {o.level}/{o.maxLevel}
               </span>
             </button>
           ))}
 
-      {/* Minimal top bar */}
       {playing && (
         <div className="absolute top-0 inset-x-0 z-20 pointer-events-none p-2 pt-[max(0.5rem,env(safe-area-inset-top))] flex items-start justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -345,7 +354,6 @@ export function GameApp() {
             </div>
           </div>
           <div className="flex flex-col items-center gap-1">
-            {/* Pipeline counters — color dots, no emoji */}
             <div className="flex gap-1 items-end">
               {[
                 { v: hud.raw, color: "bg-pink-400", hot: hud.nextStep === 1 },
@@ -396,7 +404,6 @@ export function GameApp() {
         </div>
       )}
 
-      {/* Tiny contextual chip near action (only when near something) */}
       {playing && canUse && (
         <div className="absolute bottom-[22%] right-[18%] z-20 pointer-events-none">
           <div className="rounded-full bg-accent text-accent-fg text-xs font-bold px-3 py-1 shadow-md">
@@ -405,7 +412,6 @@ export function GameApp() {
         </div>
       )}
 
-      {/* Short toast only */}
       {playing && hud.message && (
         <div className="absolute top-[14%] inset-x-0 z-20 flex justify-center pointer-events-none px-4">
           <div className="rounded-full bg-bg/90 text-fg text-sm font-semibold px-4 py-1.5 shadow-lg border border-accent/40 backdrop-blur-sm">
@@ -414,7 +420,6 @@ export function GameApp() {
         </div>
       )}
 
-      {/* Controls — landscape: stick left, 2 big buttons right */}
       {playing && (
         <div className="absolute inset-0 z-30 pointer-events-none">
           <div
@@ -476,79 +481,20 @@ export function GameApp() {
         </div>
       )}
 
-      {/* Title */}
       {hud.screen === "title" && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-gradient-to-b from-[#2a1840]/70 to-[#1a1028]/85 pointer-events-auto overflow-y-auto">
-          <div className="w-full max-w-lg rounded-2xl border border-border bg-surface/95 p-5 shadow-2xl">
-            <h1 className="text-2xl font-black text-center text-fg tracking-tight">Booloobee</h1>
-            <p className="text-center text-subtle text-sm mt-1">Ranch · glitter pipeline · rainbows</p>
-
-            <div className="mt-4">
-              <div className="text-xs text-muted mb-2 text-center">Pick a character</div>
-              <div className="grid grid-cols-5 gap-2">
-                {CHARACTERS.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => {
-                      setCharacter(c.id);
-                      engineRef.current?.setCharacter(c.id);
-                      gameAudio.play("ui");
-                    }}
-                    className={`rounded-xl border p-2 text-center min-h-16 ${
-                      character === c.id
-                        ? "border-accent bg-accent/20 ring-2 ring-accent"
-                        : "border-border bg-surface-2"
-                    }`}
-                    style={{ touchAction: "manipulation" }}
-                  >
-                    <div className="text-2xl leading-none">{c.emoji}</div>
-                    <div className="text-[9px] mt-1 text-fg font-semibold leading-tight">{c.name}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-5 flex flex-col gap-2">
-              <button
-                type="button"
-                data-action="start"
-                disabled={!ready}
-                className="w-full rounded-xl bg-accent text-accent-fg px-4 py-3.5 text-sm font-bold min-h-12 disabled:opacity-50"
-                style={{ touchAction: "manipulation", pointerEvents: "auto" }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!ready) return;
-                  gameAudio.unlock();
-                  runAction("start");
-                }}
-              >
-                {ready ? "Play" : "Loading…"}
-              </button>
-              <button
-                type="button"
-                data-action="continue"
-                className="w-full rounded-xl border border-border bg-surface-2 text-fg px-4 py-3 text-sm font-semibold min-h-12"
-                style={{ touchAction: "manipulation", pointerEvents: "auto" }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  gameAudio.unlock();
-                  runAction("continue");
-                }}
-              >
-                Continue
-              </button>
-            </div>
-            <p className="text-center text-[11px] text-muted mt-3">
-              Walk to pink piles · green button works the chain
-            </p>
-          </div>
-        </div>
+        <TitleOverlay
+          ready={ready}
+          character={character}
+          setCharacter={setCharacter}
+          hud={hud}
+          onStart={() => runAction("start")}
+          onContinue={() => runAction("continue")}
+          onStartLevel={(n) => runAction("startLevel", String(n))}
+          onDaily={() => runAction("daily")}
+          setEngineCharacter={(id) => engineRef.current?.setCharacter(id)}
+        />
       )}
 
-      {/* Pause / end screens — keep tiny */}
       {hud.screen === "paused" && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/50 pointer-events-auto p-4">
           <div className="w-full max-w-xs rounded-2xl bg-surface border border-border p-5 flex flex-col gap-2">
@@ -575,11 +521,12 @@ export function GameApp() {
       {hud.screen === "levelComplete" && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/50 pointer-events-auto p-4">
           <div className="w-full max-w-xs rounded-2xl bg-surface border border-border p-5 text-center">
-            <div className="text-3xl mb-2">🎉</div>
-            <div className="font-bold text-fg text-lg">Done!</div>
-            <div className="text-gold font-bold mt-1">{hud.coins}c</div>
+            <div className="text-3xl mb-2">\ud83c\udf89</div>
+            <div className="font-bold text-fg text-lg">{hud.levelName}</div>
+            <div className="text-xs text-muted mt-1">{hud.actTitle}</div>
+            <div className="text-gold font-bold mt-2">{hud.coins}c</div>
             <button type="button" data-action="next" className="mt-4 w-full rounded-xl bg-accent text-accent-fg py-3 font-bold min-h-12">
-              Next
+              Next stage
             </button>
           </div>
         </div>
