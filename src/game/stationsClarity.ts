@@ -2,6 +2,7 @@
  * Clearer station stand pads + slower enemy wave cadence (runtime patch).
  */
 import * as THREE from "three";
+import { gameAudio } from "./audio";
 
 const STATION_USE_RANGE = 3.4;
 const STATION_PAD_OFFSET = 2.35;
@@ -23,6 +24,7 @@ export function installStationsClarity(eng: any) {
     return Math.hypot(pad.x - eng.playerPos.x, pad.z - eng.playerPos.z) < STATION_USE_RANGE;
   };
   eng.nearStation = nearStation;
+  eng.padHintKey = null as string | null;
 
   eng.updateWaves = function () {
     if (!this.level?.enemyWaves) return;
@@ -78,16 +80,28 @@ export function installStationsClarity(eng: any) {
     eng.handleInteract = function (dt: number) {
       origHI(dt);
       if (this.screen !== "playing" || !this.spa) return;
-
+      let key: string | null = null;
       if (nearStation(this.market.pos) && this.boxed > 0) {
         this.interactHint = "Sell";
+        key = "sell";
       } else if (nearStation(this.packer.pos) && this.glitter > 0) {
         this.interactHint = "Box";
+        key = "box";
       } else if (nearStation(this.processor.pos) && this.washed > 0) {
         this.interactHint = "Grind";
+        key = "grind";
       } else if (nearStation(this.spa.pos) && this.raw > 0) {
         this.interactHint = "Wash";
+        key = "wash";
       }
+      if (key && key !== this.padHintKey) {
+        try {
+          gameAudio.play("ui");
+        } catch {
+          /* ignore */
+        }
+      }
+      this.padHintKey = key;
     };
   }
 
