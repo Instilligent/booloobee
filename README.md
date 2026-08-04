@@ -1,39 +1,46 @@
 # Booloobee Ranch
 
-Silly **3D ranch supply-chain** game for pilot testing.
+Silly **3D ranch supply-chain** game — scoop pink unicorn glitter, run the spa→grind→box→sell pipeline, hire robots, rainbow-blast pests.
 
-Scoop **pink unicorn poop** (with glitter) → bubble spa → grind glitter → box with bows → sell to a customer queue. Hire farmers/robots from floating buttons at the pink shop. Rainbow-blast unicorns **and** dinosaurs.
+**18 stages · 5 acts · iOS App Store planned (IAP via StoreKit).**
 
-## Play (local)
+## Play
 
 ```bash
 npm install
 npm run dev
 ```
 
-Best on **landscape** phone or desktop. Sound unlocks on first tap.
+Landscape phone or desktop. Sound unlocks on first tap.
+
+## Campaign structure
+
+| Act | Stages | Theme |
+|-----|--------|--------|
+| 1 Learn | 1–3 | Starter loop |
+| 2 Automate | 4–6 | Hires & upgrades |
+| 3 Carnival | 7–9 | Chaos & denser pests |
+| 4 Factory | 10–12 | Station bottlenecks |
+| 5 VIP / Boss | 13–18 | Stampede → Infinite Parade |
 
 ## Features
 
-- 5 characters (Rancher, Cowgirl, Bot-Bee, Mage, Dino)
 - Pipeline: scoop → wash → grind → box → sell
-- In-world hire/upgrade buttons (no separate shop window)
-- Unicorn + dinosaur pests
-- Procedural SFX + soft music
-- Minimal landscape HUD for pilot feedback
+- Upgrades appear **at the station they affect**
+- Characters, unicorns + dinos, stars, fountain, compost, jukebox
+- Procedural audio, mobile-first controls
+
+## Docs
+
+- [iOS App Store & IAP](docs/IOS_APP_STORE.md)
+- [Advertising & ASO](docs/ADVERTISING.md)
+- [Product roadmap](docs/PRODUCT_ROADMAP.md)
+- [Improvement log](IMPROVEMENT_LOG.md)
 
 ## Stack
 
 React 19 · TanStack Start · Three.js · Vite · Tailwind v4
 
-## Scripts
-
-```bash
-npm run dev
-npm run build
-npm run typecheck
-```
-
 ## Org
 
-Maintained under [Instilligent](https://github.com/Instilligent).
+[Instilligent](https://github.com/Instilligent) · `Instilligent/booloobee`
