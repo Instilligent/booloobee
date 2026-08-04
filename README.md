@@ -26,9 +26,12 @@ Landscape phone or desktop. Sound unlocks on first tap.
 ## Features
 
 - Pipeline: scoop → wash → grind → box → sell
+- **18 stages** with level select + continue
+- Daily gift (+25c) and act-scaled quota bonuses
 - Upgrades appear **at the station they affect**
 - Characters, unicorns + dinos, stars, fountain, compost, jukebox
 - Procedural audio, mobile-first controls
+- iOS path: `capacitor.config.ts` + `src/game/iap.ts` StoreKit stub
 
 ## Docs
 
