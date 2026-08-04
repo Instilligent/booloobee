@@ -83,3 +83,11 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Prefer landscape layout on phones */
+html, body {
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}

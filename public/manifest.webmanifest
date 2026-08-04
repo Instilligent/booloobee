@@ -1,0 +1,11 @@
+{
+  "name": "Booloobee Ranch",
+  "short_name": "Booloobee",
+  "description": "Scoop unicorn sparkle-poop, shoot rainbows, sell glitter.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1a1028",
+  "theme_color": "#1a1028",
+  "lang": "en"
+}

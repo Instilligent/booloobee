@@ -33,3 +33,20 @@ npx cap open ios
 ## TestFlight
 
 Archive in Xcode → distribute to TestFlight → invite pilots.
+
+## Force landscape (Xcode)
+
+After `npx cap open ios`, in **Info.plist** (or target → General → Deployment Info):
+
+- Uncheck Portrait / Upside Down
+- Keep **Landscape Left** and **Landscape Right** only
+
+Or set in `ios/App/App/Info.plist`:
+
+```xml
+<key>UISupportedInterfaceOrientations</key>
+<array>
+  <string>UIInterfaceOrientationLandscapeLeft</string>
+  <string>UIInterfaceOrientationLandscapeRight</string>
+</array>
+```
